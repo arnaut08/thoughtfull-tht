@@ -1,5 +1,7 @@
 import "dotenv/config";
 import express from "express";
+// Loads the Supabase client and checks its env vars at startup.
+import "./db.js";
 
 const app = express();
 const port = process.env.PORT ?? 3001;
