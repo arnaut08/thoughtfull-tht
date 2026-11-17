@@ -14,12 +14,14 @@ Open two terminals from the project root:
 ```sh
 cd server
 npm install
+cp .env.example .env
 npm run dev
 ```
 
 ```sh
 cd client
 npm install
+cp .env.example .env
 npm run dev
 ```
 
@@ -29,4 +31,7 @@ the Express server, so the client can call API endpoints without configuring
 CORS.
 
 The server exposes `GET /api/health`, which returns `{ "status": "ok" }`.
-Set `PORT` in the server environment to override its default port.
+The server loads `server/.env` when starting; set `PORT` there (or in the
+process environment) to override its default port. Vite loads `client/.env`
+automatically, and `VITE_API_URL` sets the API path used by the client. Keep it
+at `/api` to use the development proxy.

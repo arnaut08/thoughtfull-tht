@@ -4,7 +4,9 @@ function App() {
   const [apiStatus, setApiStatus] = useState("Loading...");
 
   useEffect(() => {
-    fetch("/api/health")
+    const apiUrl = import.meta.env.VITE_API_URL || "/api";
+
+    fetch(`${apiUrl}/health`)
       .then((response) => {
         if (!response.ok) {
           throw new Error(`Request failed with status ${response.status}`);
