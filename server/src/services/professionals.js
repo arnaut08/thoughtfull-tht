@@ -14,7 +14,7 @@ export async function listProfessionals() {
 async function getBookingsOverlapping(column, id, from, to) {
   const { data, error } = await supabase
     .from("bookings")
-    .select("starts_at, ends_at, member_id")
+    .select("id, starts_at, ends_at, member_id")
     .eq(column, id)
     .lt("starts_at", to.toISO())
     .gt("ends_at", from.toISO());
@@ -37,6 +37,21 @@ export function getMemberBookingsOverlapping(memberId, from, to) {
 // is already booked, or "member_conflict" if the member has an overlapping session with any professional.
 export async function bookSession({ professionalId, memberId, startsAt, endsAt }) {
   const { data, error } = await supabase.rpc("book_session", {
+    p_professional_id: professionalId,
+    p_member_id: memberId,
+    p_starts_at: startsAt,
+    p_ends_at: endsAt,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+// Moves an existing booking to a new slot via the reschedule_session SQL function. Throws with the same
+// messages as bookSession, plus "booking_not_found" and "cancellation_closed".
+export async function rescheduleSession({ bookingId, professionalId, memberId, startsAt, endsAt }) {
+  const { data, error } = await supabase.rpc("reschedule_session", {
+    p_booking_id: bookingId,
     p_professional_id: professionalId,
     p_member_id: memberId,
     p_starts_at: startsAt,

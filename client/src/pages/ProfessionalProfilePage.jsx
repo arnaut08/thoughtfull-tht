@@ -11,7 +11,11 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import { bookProfessionalSlot, fetchProfessionalProfile } from "../api/professionals.js";
+import {
+  bookProfessionalSlot,
+  fetchProfessionalProfile,
+  rescheduleProfessionalSlot,
+} from "../api/professionals.js";
 
 // FullCalendar renders in UTC, so each instant is shifted to the wall-clock time it shows in the member's zone.
 function toWallClockDate(instant, timezone) {
@@ -48,7 +52,15 @@ function formatSlotRange(start, end, timezone) {
   return `${date.format(startDate)}, ${time.format(startDate)} – ${time.format(new Date(end))}`;
 }
 
-export default function ProfessionalProfilePage({ token, professionalId, memberTimezone, onBack }) {
+// With rescheduleBookingId set, confirming moves that session instead of booking a new one.
+export default function ProfessionalProfilePage({
+  token,
+  professionalId,
+  memberTimezone,
+  rescheduleBookingId,
+  onBack,
+  onRescheduled,
+}) {
   const [profile, setProfile] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [selectedSlot, setSelectedSlot] = useState(null);
@@ -57,24 +69,25 @@ export default function ProfessionalProfilePage({ token, professionalId, memberT
   const [confirmation, setConfirmation] = useState(null);
 
   const loadProfile = useCallback(
-    () => fetchProfessionalProfile(token, professionalId).then(setProfile),
-    [token, professionalId],
+    () => fetchProfessionalProfile(token, professionalId, rescheduleBookingId).then(setProfile),
+    [token, professionalId, rescheduleBookingId],
   );
 
   useEffect(() => {
     let active = true;
     setProfile(null);
     setLoadError("");
-    fetchProfessionalProfile(token, professionalId)
+    fetchProfessionalProfile(token, professionalId, rescheduleBookingId)
       .then((data) => active && setProfile(data))
       .catch((error) => active && setLoadError(error.message));
     return () => {
       active = false;
     };
-  }, [token, professionalId]);
+  }, [token, professionalId, rescheduleBookingId]);
 
   // Clicking a slot only selects it; the member confirms in the panel below the calendar.
   function handleEventClick(info) {
+    if (info.event.id === profile.reschedule?.start) return;
     const slot = profile.slots.find((candidate) => candidate.start === info.event.id);
     setSelectedSlot(slot ?? null);
     setConfirmation(null);
@@ -82,30 +95,57 @@ export default function ProfessionalProfilePage({ token, professionalId, memberT
   }
 
   async function handleConfirm() {
+    const previous = profile.reschedule;
     setBooking(true);
     setBookError("");
+    let rescheduled = false;
     try {
-      const data = await bookProfessionalSlot(token, professionalId, selectedSlot.start);
-      setConfirmation(data.booking);
+      if (rescheduleBookingId) {
+        const data = await rescheduleProfessionalSlot(
+          token,
+          professionalId,
+          rescheduleBookingId,
+          selectedSlot.start,
+        );
+        setConfirmation({
+          kind: "reschedule",
+          from: { start: previous.start, end: previous.end },
+          booking: data.booking,
+        });
+        rescheduled = true;
+      } else {
+        const data = await bookProfessionalSlot(token, professionalId, selectedSlot.start);
+        setConfirmation({ kind: "booking", booking: data.booking });
+      }
     } catch (error) {
       setBookError(error.message);
     } finally {
       setSelectedSlot(null);
       setBooking(false);
-      // Refresh so booked sessions and any slot taken by someone else disappear.
-      loadProfile().catch((error) => setLoadError(error.message));
+      if (rescheduled) {
+        // Leaving reschedule mode refetches the profile. This page stays mounted, so the confirmation remains.
+        onRescheduled();
+      } else {
+        // Refresh so booked sessions and any slot taken by someone else disappear.
+        loadProfile().catch((error) => setLoadError(error.message));
+      }
     }
   }
 
+  // The session being rescheduled is offered as open by the server, but it is shown as current and can't be picked.
   const events = useMemo(
     () =>
       profile
-        ? profile.slots.map((slot) => ({
-            id: slot.start,
-            title: "Open",
-            start: toWallClockDate(new Date(slot.start), memberTimezone),
-            end: toWallClockDate(new Date(slot.end), memberTimezone),
-          }))
+        ? profile.slots.map((slot) => {
+            const isCurrent = slot.start === profile.reschedule?.start;
+            return {
+              id: slot.start,
+              title: isCurrent ? "Current" : "Open",
+              classNames: isCurrent ? ["current-session"] : [],
+              start: toWallClockDate(new Date(slot.start), memberTimezone),
+              end: toWallClockDate(new Date(slot.end), memberTimezone),
+            };
+          })
         : [],
     [profile, memberTimezone],
   );
@@ -124,7 +164,7 @@ export default function ProfessionalProfilePage({ token, professionalId, memberT
           "&:hover": { borderColor: "#0e474b", bgcolor: "#eff7f6" },
         }}
       >
-        Back to professionals
+        {rescheduleBookingId ? "Back to my sessions" : "Back to professionals"}
       </Button>
 
       {!profile && !loadError && (
@@ -153,6 +193,16 @@ export default function ProfessionalProfilePage({ token, professionalId, memberT
             </Typography>
           </Box>
 
+          {profile.reschedule && (
+            <Alert severity="info">
+              Rescheduling your session currently on{" "}
+              <strong>
+                {formatSlotRange(profile.reschedule.start, profile.reschedule.end, memberTimezone)}
+              </strong>
+              . Pick a new open slot below.
+            </Alert>
+          )}
+
           {events.length === 0 && (
             <Typography color="text.secondary">No open sessions in the next 4 weeks.</Typography>
           )}
@@ -164,6 +214,7 @@ export default function ProfessionalProfilePage({ token, professionalId, memberT
                 initialView="timeGridWeek"
                 initialDate={today}
                 headerToolbar={{ left: "prev,next today", center: "title", right: "" }}
+                buttonText={{ today: "Today" }}
                 timeZone="UTC"
                 firstDay={0}
                 dayHeaderFormat={{ weekday: "short", month: "short", day: "numeric" }}
@@ -179,10 +230,17 @@ export default function ProfessionalProfilePage({ token, professionalId, memberT
             </CardContent>
           </Card>
 
-          {confirmation && (
+          {confirmation?.kind === "booking" && (
             <Alert severity="success">
-              Booked with {confirmation.professional.name} on{" "}
-              {formatSlotRange(confirmation.start, confirmation.end, memberTimezone)}.
+              Booked with {confirmation.booking.professional.name} on{" "}
+              {formatSlotRange(confirmation.booking.start, confirmation.booking.end, memberTimezone)}.
+            </Alert>
+          )}
+          {confirmation?.kind === "reschedule" && (
+            <Alert severity="success">
+              Rescheduled with {confirmation.booking.professional.name} from{" "}
+              {formatSlotRange(confirmation.from.start, confirmation.from.end, memberTimezone)} to{" "}
+              {formatSlotRange(confirmation.booking.start, confirmation.booking.end, memberTimezone)}.
             </Alert>
           )}
           {bookError && <Alert severity="error">{bookError}</Alert>}
@@ -192,14 +250,20 @@ export default function ProfessionalProfilePage({ token, professionalId, memberT
               <CardContent>
                 <Stack spacing={2}>
                   <Typography>
-                    Selected session:{" "}
+                    {rescheduleBookingId ? "New session" : "Selected session"}:{" "}
                     <strong>
                       {formatSlotRange(selectedSlot.start, selectedSlot.end, memberTimezone)}
                     </strong>
                   </Typography>
                   <Stack direction="row" spacing={1}>
                     <Button variant="contained" onClick={handleConfirm} disabled={booking}>
-                      {booking ? "Booking…" : "Confirm booking"}
+                      {booking
+                        ? rescheduleBookingId
+                          ? "Rescheduling…"
+                          : "Booking…"
+                        : rescheduleBookingId
+                          ? "Confirm reschedule"
+                          : "Confirm booking"}
                     </Button>
                     <Button onClick={() => setSelectedSlot(null)} disabled={booking}>
                       Cancel

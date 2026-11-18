@@ -4,14 +4,21 @@ import { requireAuth } from "../middleware/requireAuth.js";
 import { requireMember } from "../middleware/requireMember.js";
 import { requireProfessional } from "../middleware/requireProfessional.js";
 import { toApiRule } from "../lib/availability.js";
+import { isBeyondNotice, noticeClosedMessage, noticeCutoff } from "../lib/cancellation.js";
 import { SLOT_HORIZON_DAYS, generateOpenSlots } from "../lib/slots.js";
 import { getRulesForProfessional } from "../services/availability.js";
-import { getBookingsForMember } from "../services/bookings.js";
+import {
+  deleteBookingForMember,
+  getBookingForMember,
+  getBookingsForMember,
+} from "../services/bookings.js";
 import { getProfessionalBookingsOverlapping } from "../services/professionals.js";
 import { findUserById, findUsersByIds } from "../services/users.js";
 
 export const bookingsRouter = Router();
 export const professionalBookingsRouter = Router();
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 bookingsRouter.use(requireAuth, requireMember);
 
@@ -33,14 +40,17 @@ bookingsRouter.get("/", async (request, response) => {
 
   const now = DateTime.utc();
   const sessions = rows.map((row) => ({
+    id: row.id,
     professional: professionals.get(row.professional_id),
     start: DateTime.fromISO(row.starts_at),
     end: DateTime.fromISO(row.ends_at),
   }));
-  const toApiSession = ({ professional, start, end }) => ({
+  const toApiSession = ({ id, professional, start, end }) => ({
+    id,
     professional: { id: professional.id, name: professional.name, timezone: professional.timezone },
     start: start.setZone(member.timezone).toISO(),
     end: end.setZone(member.timezone).toISO(),
+    cancellable: isBeyondNotice(start, now),
   });
 
   response.json({
@@ -51,6 +61,31 @@ bookingsRouter.get("/", async (request, response) => {
       .reverse()
       .map(toApiSession),
   });
+});
+
+// Cancels one of the member's sessions. Sessions starting within the cancellation notice window are refused with 409.
+bookingsRouter.delete("/:id", async (request, response) => {
+  const bookingId = request.params.id;
+  if (!UUID_PATTERN.test(bookingId)) {
+    return response.status(404).json({ error: "Session not found" });
+  }
+
+  const booking = await getBookingForMember(bookingId, request.user.id);
+  if (!booking) {
+    return response.status(404).json({ error: "Session not found" });
+  }
+
+  const cancellationCutoff = noticeCutoff(DateTime.utc());
+  if (DateTime.fromISO(booking.starts_at) <= cancellationCutoff) {
+    return response.status(409).json({ error: noticeClosedMessage("cancelled") });
+  }
+
+  const deleted = await deleteBookingForMember(bookingId, request.user.id, cancellationCutoff);
+  if (!deleted) {
+    return response.status(409).json({ error: noticeClosedMessage("cancelled") });
+  }
+
+  response.status(204).end();
 });
 
 professionalBookingsRouter.use(requireAuth, requireProfessional);

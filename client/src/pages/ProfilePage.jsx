@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { Alert, Box, Card, CardContent, Chip, Divider, Skeleton, Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Chip, Divider, Skeleton, Stack, Typography } from "@mui/material";
 import NameAvatar from "../components/NameAvatar.jsx";
-import { fetchMemberBookings } from "../api/bookings.js";
+import { cancelMemberBooking, fetchMemberBookings } from "../api/bookings.js";
 import { formatSessionDate, formatSessionTime } from "../lib/schedule.js";
 
 function DetailRow({ label, value }) {
   return (
-    <Stack direction="row" justifyContent="space-between" spacing={2}>
+    <Stack direction="row" sx={{ justifyContent: "space-between" }} spacing={2}>
       <Typography color="text.secondary">{label}</Typography>
       <Typography sx={{ textAlign: "right", wordBreak: "break-word" }}>{value}</Typography>
     </Stack>
@@ -15,7 +15,7 @@ function DetailRow({ label, value }) {
 
 function SessionRowSkeleton() {
   return (
-    <Stack direction="row" spacing={2} alignItems="center">
+    <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
       <Skeleton variant="circular" width={40} height={40} />
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Skeleton variant="text" width="50%" />
@@ -25,8 +25,8 @@ function SessionRowSkeleton() {
   );
 }
 
-// sessions is null while loading, which shows skeleton rows.
-function SessionGroup({ title, sessions, timezone, emptyText }) {
+// sessions is null while loading, which shows skeleton rows. onCancel and onReschedule are passed only for upcoming sessions.
+function SessionGroup({ title, sessions, timezone, emptyText, onCancel, onReschedule, cancelingId }) {
   return (
     <Box>
       <Typography variant="subtitle1" component="h3" fontWeight={600}>
@@ -49,12 +49,12 @@ function SessionGroup({ title, sessions, timezone, emptyText }) {
       {sessions?.length > 0 && (
         <Stack spacing={2} divider={<Divider flexItem />} sx={{ mt: 1.5 }}>
           {sessions.map((session) => (
-            <Stack key={session.start} direction="row" spacing={2} alignItems="center">
+            <Stack key={session.id} direction="row" spacing={2} sx={{ alignItems: "center" }}>
               <NameAvatar
                 name={session.professional.name}
                 sx={{ width: 40, height: 40, bgcolor: "#fde8da", color: "#a4552a" }}
               />
-              <Box sx={{ minWidth: 0 }}>
+              <Box sx={{ minWidth: 0, flex: 1 }}>
                 <Typography noWrap fontWeight={500}>
                   {session.professional.name}
                 </Typography>
@@ -64,6 +64,30 @@ function SessionGroup({ title, sessions, timezone, emptyText }) {
                   {formatSessionTime(session.end, timezone)}
                 </Typography>
               </Box>
+              {onCancel &&
+                (session.cancellable ? (
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      size="small"
+                      disabled={cancelingId !== null}
+                      onClick={() => onReschedule(session)}
+                    >
+                      Reschedule
+                    </Button>
+                    <Button
+                      color="error"
+                      size="small"
+                      disabled={cancelingId !== null}
+                      onClick={() => onCancel(session)}
+                    >
+                      {cancelingId === session.id ? "Cancelling…" : "Cancel"}
+                    </Button>
+                  </Stack>
+                ) : (
+                  <Typography variant="caption" color="text.secondary" sx={{ maxWidth: 160, textAlign: "right" }}>
+                    Starts within 24 hours, so it can't be changed.
+                  </Typography>
+                ))}
             </Stack>
           ))}
         </Stack>
@@ -72,11 +96,13 @@ function SessionGroup({ title, sessions, timezone, emptyText }) {
   );
 }
 
-export default function ProfilePage({ token, user }) {
+export default function ProfilePage({ token, user, onReschedule }) {
   const roleLabel = user.role === "professional" ? "Professional" : "Member";
   const isMember = user.role === "member";
   const [bookings, setBookings] = useState(null);
   const [bookingsError, setBookingsError] = useState("");
+  const [cancelingId, setCancelingId] = useState(null);
+  const [cancelError, setCancelError] = useState("");
 
   useEffect(() => {
     if (!isMember) return undefined;
@@ -89,6 +115,19 @@ export default function ProfilePage({ token, user }) {
     };
   }, [token, isMember]);
 
+  async function handleCancel(session) {
+    setCancelError("");
+    setCancelingId(session.id);
+    try {
+      await cancelMemberBooking(token, session.id);
+      setBookings(await fetchMemberBookings(token));
+    } catch (error) {
+      setCancelError(error.message);
+    } finally {
+      setCancelingId(null);
+    }
+  }
+
   return (
     <Stack spacing={3} sx={{ maxWidth: 720, mx: "auto" }}>
       <Typography variant="h5" component="h1">
@@ -97,7 +136,7 @@ export default function ProfilePage({ token, user }) {
 
       <Card>
         <CardContent sx={{ p: 3 }}>
-          <Stack direction="row" spacing={2} alignItems="center">
+          <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
             <NameAvatar name={user.name} sx={{ width: 64, height: 64, bgcolor: "primary.main" }} />
             <Box sx={{ minWidth: 0 }}>
               <Typography variant="h6" component="h2" noWrap>
@@ -132,11 +171,15 @@ export default function ProfilePage({ token, user }) {
               </Alert>
             ) : (
               <Stack spacing={3} sx={{ mt: 3 }}>
+                {cancelError && <Alert severity="error">{cancelError}</Alert>}
                 <SessionGroup
                   title="Upcoming"
                   sessions={bookings?.upcoming ?? null}
                   timezone={user.timezone}
                   emptyText="No upcoming sessions."
+                  onCancel={handleCancel}
+                  onReschedule={onReschedule}
+                  cancelingId={cancelingId}
                 />
                 <Divider />
                 <SessionGroup

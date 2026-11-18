@@ -16,7 +16,7 @@ function ProfessionalCardSkeleton() {
   return (
     <Card sx={{ height: "100%", border: 0, boxShadow: "0 1px 2px 0 rgb(0 0 0 / 0.05)" }}>
       <CardContent sx={{ p: 3 }}>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
           <Skeleton variant="circular" width={56} height={56} />
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Skeleton variant="text" sx={{ fontSize: "1.25rem", width: "60%" }} />
@@ -89,7 +89,7 @@ export default function MemberDashboardPage({ token, user, onSelectProfessional 
               sx={{ height: "100%" }}
             >
               <CardContent sx={{ p: 3 }}>
-                <Stack direction="row" spacing={2} alignItems="center">
+                <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
                   <NameAvatar
                     name={professional.name}
                     sx={{ width: 56, height: 56, bgcolor: "#fde8da", color: "#a4552a" }}

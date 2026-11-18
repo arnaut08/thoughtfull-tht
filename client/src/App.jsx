@@ -39,8 +39,8 @@ function App() {
     return (
       <Box sx={{ minHeight: "100vh", p: { xs: 2, sm: 3 } }} aria-busy="true" aria-live="polite">
         <Stack spacing={3} sx={{ maxWidth: 1200, mx: "auto" }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Stack direction="row" spacing={1.5} alignItems="center">
+          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center" }}>
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
               <Skeleton variant="circular" width={32} height={32} />
               <Skeleton variant="text" width={140} />
             </Stack>

@@ -16,11 +16,34 @@ export default function AppShell({ token, user, onSignOut }) {
   function renderPage() {
     switch (view.page) {
       case "profile":
-        return <ProfilePage token={token} user={user} />;
+        return (
+          <ProfilePage
+            token={token}
+            user={user}
+            onReschedule={(session) =>
+              setView({
+                page: "professional",
+                professionalId: session.professional.id,
+                rescheduleBookingId: session.id,
+              })
+            }
+          />
+        );
       case "availability":
         return <AvailabilityPage token={token} user={user} onBack={goHome} />;
       case "professional":
-        return (
+        return view.rescheduleBookingId ? (
+          <ProfessionalProfilePage
+            token={token}
+            professionalId={view.professionalId}
+            memberTimezone={user.timezone}
+            rescheduleBookingId={view.rescheduleBookingId}
+            onBack={() => setView({ page: "profile" })}
+            onRescheduled={() =>
+              setView({ page: "professional", professionalId: view.professionalId })
+            }
+          />
+        ) : (
           <ProfessionalProfilePage
             token={token}
             professionalId={view.professionalId}

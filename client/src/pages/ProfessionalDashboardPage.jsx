@@ -100,6 +100,7 @@ function UpcomingSessionsCard({ bookings, loadError }) {
         <FullCalendar
           plugins={[timeGridPlugin]}
           initialView="timeGridWeek"
+          buttonText={{ today: "Today", week: "Week", day: "Day" }}
           headerToolbar={{
             left: "prev,next today",
             center: "title",
