@@ -63,3 +63,16 @@ export async function findUserById(id) {
   if (error) throw error;
   return data;
 }
+
+export async function findUsersByIds(ids) {
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, name, timezone")
+    .in("id", uniqueIds);
+
+  if (error) throw error;
+  return data;
+}
