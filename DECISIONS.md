@@ -25,6 +25,12 @@
   booking the same session at once, and stops one member from holding overlapping
   sessions with two professionals. The lock order is fixed to avoid deadlocks.
 
+## Cancellations
+- A member can cancel a session only if it starts more than 24 hours from now.
+  `DELETE /api/bookings/:id` returns 409 otherwise. The delete repeats the start-time
+  condition in the same statement, so a session can't be cancelled after the cutoff.
+- `GET /api/bookings` returns each session's `id` and a `cancellable` flag.
+
 ## Slot generation
 - Slots are built from the professional's local-time windows in the professional's
   timezone, then returned as instants in the member's timezone. Luxon handles
