@@ -97,6 +97,15 @@ Members browse professionals and see their open sessions. Any signed-in user can
 - Windows are generated in the professional's timezone, so DST changes are handled.
   See `DECISIONS.md`.
 
+| Method | Path                           | Auth   | Description |
+| ------ | ------------------------------ | ------ | ----------- |
+| POST   | `/api/professionals/:id/bookings` | Bearer (`member`) | Body: `{ starts_at }`, the ISO `start` of an open slot. Returns 201 with `{ booking: { professional, start, end } }` in the member's zone. 409 if the time isn't an open slot or was just taken. 403 for professionals. 400 if `starts_at` isn't an ISO timestamp. |
+
+- Members pick a slot on the calendar, then confirm it. The start must match a
+  currently open slot exactly, so arbitrary times are rejected.
+- Bookings are written by the `book_session` SQL function (`server/migrations/0004_create_book_session_function.sql`),
+  which locks the professional's row so two members can't take the same session.
+
 
 Run the server tests from `server/` with `npm test`.
 The server loads `server/.env` when starting; set `PORT` there (or in the

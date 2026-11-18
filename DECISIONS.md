@@ -17,6 +17,10 @@
   Slot generation skips any session that overlaps a booking.
 - Sessions are 50 minutes, matching the minimum window length, so every window
   that is accepted can hold at least one session.
+- Members book by sending the `starts_at` of a slot from the current list. The server
+  recomputes slots and rejects any other time with 409.
+- `book_session` locks the professional's `users` row, checks for overlapping bookings,
+  then inserts. This stops two members from booking the same session at once.
 
 ## Slot generation
 - Slots are built from the professional's local-time windows in the professional's
