@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import { Alert, Box, Button, Card, CardContent, CircularProgress, Stack, Typography } from "@mui/material";
-import { fetchProfessionalProfile } from "../api/professionals.js";
+import { bookProfessionalSlot, fetchProfessionalProfile } from "../api/professionals.js";
 
 // FullCalendar renders in UTC, so each instant is shifted to the wall-clock time it shows in the member's zone.
 function toWallClockDate(instant, timezone) {
@@ -22,22 +22,71 @@ function toWallClockDate(instant, timezone) {
   return new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute));
 }
 
+// Formats an ISO instant as a readable date and time range in the given zone.
+function formatSlotRange(start, end, timezone) {
+  const date = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  });
+  const time = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const startDate = new Date(start);
+  return `${date.format(startDate)}, ${time.format(startDate)} – ${time.format(new Date(end))}`;
+}
+
 export default function ProfessionalProfilePage({ token, professionalId, memberTimezone, onBack }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [booking, setBooking] = useState(false);
+  const [bookError, setBookError] = useState("");
+  const [confirmation, setConfirmation] = useState(null);
+
+  const loadProfile = useCallback(
+    () => fetchProfessionalProfile(token, professionalId).then(setProfile),
+    [token, professionalId],
+  );
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    fetchProfessionalProfile(token, professionalId)
-      .then((data) => active && setProfile(data))
+    loadProfile()
       .catch((error) => active && setLoadError(error.message))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
-  }, [token, professionalId]);
+  }, [loadProfile]);
+
+  // Clicking a slot only selects it; the member confirms in the panel below the calendar.
+  function handleEventClick(info) {
+    const slot = profile.slots.find((candidate) => candidate.start === info.event.id);
+    setSelectedSlot(slot ?? null);
+    setConfirmation(null);
+    setBookError("");
+  }
+
+  async function handleConfirm() {
+    setBooking(true);
+    setBookError("");
+    try {
+      const data = await bookProfessionalSlot(token, professionalId, selectedSlot.start);
+      setConfirmation(data.booking);
+    } catch (error) {
+      setBookError(error.message);
+    } finally {
+      setSelectedSlot(null);
+      setBooking(false);
+      // Refresh so booked sessions and any slot taken by someone else disappear.
+      loadProfile().catch((error) => setLoadError(error.message));
+    }
+  }
 
   const events = useMemo(
     () =>
@@ -96,9 +145,41 @@ export default function ProfessionalProfilePage({ token, professionalId, memberT
                   height="auto"
                   events={events}
                   eventDisplay="block"
+                  eventClick={handleEventClick}
                 />
               </CardContent>
             </Card>
+
+            {confirmation && (
+              <Alert severity="success">
+                Booked with {confirmation.professional.name} on{" "}
+                {formatSlotRange(confirmation.start, confirmation.end, memberTimezone)}.
+              </Alert>
+            )}
+            {bookError && <Alert severity="error">{bookError}</Alert>}
+
+            {selectedSlot && (
+              <Card>
+                <CardContent>
+                  <Stack spacing={2}>
+                    <Typography>
+                      Selected session:{" "}
+                      <strong>
+                        {formatSlotRange(selectedSlot.start, selectedSlot.end, memberTimezone)}
+                      </strong>
+                    </Typography>
+                    <Stack direction="row" spacing={1}>
+                      <Button variant="contained" onClick={handleConfirm} disabled={booking}>
+                        {booking ? "Booking…" : "Confirm booking"}
+                      </Button>
+                      <Button onClick={() => setSelectedSlot(null)} disabled={booking}>
+                        Cancel
+                      </Button>
+                    </Stack>
+                  </Stack>
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
       </Stack>
