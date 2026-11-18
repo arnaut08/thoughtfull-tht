@@ -8,6 +8,7 @@ process.env.JWT_EXPIRES_IN = "1h";
 const users = [];
 const availabilityRows = [];
 const bookingRows = [];
+let rejectNextBooking = false;
 const tables = {
   users,
   availability_rules: availabilityRows,
@@ -42,8 +43,26 @@ function fakeQuery(table) {
 
 const fakeSupabase = {
   from: (name) => fakeQuery(tables[name]),
-  rpc: async (name, { p_professional_id: professionalId, p_rules: rules }) => {
+  rpc: async (name, args) => {
+    if (name === "book_session") {
+      if (rejectNextBooking) {
+        rejectNextBooking = false;
+        return { data: null, error: { message: "slot_unavailable" } };
+      }
+      const { p_professional_id: professionalId, p_member_id: memberId, p_starts_at: startsAt, p_ends_at: endsAt } = args;
+      const overlaps = bookingRows.some(
+        (booking) =>
+          booking.professional_id === professionalId &&
+          booking.starts_at < endsAt &&
+          booking.ends_at > startsAt,
+      );
+      if (overlaps) return { data: null, error: { message: "slot_unavailable" } };
+      const booking = { professional_id: professionalId, member_id: memberId, starts_at: startsAt, ends_at: endsAt };
+      bookingRows.push(booking);
+      return { data: booking, error: null };
+    }
     if (name !== "replace_availability_rules") throw new Error(`unexpected rpc ${name}`);
+    const { p_professional_id: professionalId, p_rules: rules } = args;
     const kept = availabilityRows.filter((row) => row.professional_id !== professionalId);
     availabilityRows.length = 0;
     availabilityRows.push(
@@ -90,6 +109,7 @@ beforeEach(() => {
   users.length = 0;
   availabilityRows.length = 0;
   bookingRows.length = 0;
+  rejectNextBooking = false;
 });
 
 describe("normalizeRules", () => {
@@ -308,5 +328,108 @@ describe("/api/professionals", () => {
     expect(starts).not.toContain(bookedStart.toMillis());
     expect(starts).toContain(bookedStart.plus({ minutes: 50 }).toMillis());
     expect(response.body.slots.every((slot) => /-0[45]:00$/.test(slot.start))).toBe(true);
+  });
+
+  describe("POST /:id/bookings", () => {
+    function bookingRequest(token, professionalId, body) {
+      return request(app)
+        .post(`/api/professionals/${professionalId}/bookings`)
+        .set("Authorization", `Bearer ${token}`)
+        .send(body);
+    }
+
+    test("books an open slot, which then drops out of the slot list", async () => {
+      const { token } = addUser("member", "America/New_York");
+      const { user: professional } = addUser("professional", "Asia/Kolkata");
+      scheduleEveryDay(professional.id);
+      const profile = await request(app)
+        .get(`/api/professionals/${professional.id}`)
+        .set("Authorization", `Bearer ${token}`);
+      const [slot] = profile.body.slots;
+
+      const response = await bookingRequest(token, professional.id, { starts_at: slot.start });
+
+      expect(response.status).toBe(201);
+      expect(response.body.booking.start).toBe(slot.start);
+      expect(response.body.booking.end).toBe(slot.end);
+      expect(bookingRows).toHaveLength(1);
+      expect(DateTime.fromISO(bookingRows[0].starts_at).toMillis()).toBe(DateTime.fromISO(slot.start).toMillis());
+
+      const after = await request(app)
+        .get(`/api/professionals/${professional.id}`)
+        .set("Authorization", `Bearer ${token}`);
+      expect(after.body.slots.map((s) => s.start)).not.toContain(slot.start);
+    });
+
+    test("rejects a time that is not an open slot, or a slot that is already booked", async () => {
+      const { token } = addUser("member", "America/New_York");
+      const { user: professional } = addUser("professional", "Asia/Kolkata");
+      scheduleEveryDay(professional.id);
+      const profile = await request(app)
+        .get(`/api/professionals/${professional.id}`)
+        .set("Authorization", `Bearer ${token}`);
+      const [slot] = profile.body.slots;
+      const offGrid = DateTime.fromISO(slot.start).plus({ minutes: 10 }).toISO();
+
+      const offGridResponse = await bookingRequest(token, professional.id, { starts_at: offGrid });
+      const first = await bookingRequest(token, professional.id, { starts_at: slot.start });
+      const repeat = await bookingRequest(token, professional.id, { starts_at: slot.start });
+
+      expect(offGridResponse.status).toBe(409);
+      expect(first.status).toBe(201);
+      expect(repeat.status).toBe(409);
+      expect(bookingRows).toHaveLength(1);
+    });
+
+    test("returns 403 for a professional and 400 for a missing start time", async () => {
+      const { token: memberToken } = addUser("member");
+      const { user: professional, token: professionalToken } = addUser("professional");
+      scheduleEveryDay(professional.id);
+
+      const asProfessional = await bookingRequest(professionalToken, professional.id, {
+        starts_at: DateTime.utc().plus({ days: 1 }).toISO(),
+      });
+      const missing = await bookingRequest(memberToken, professional.id, {});
+
+      expect(asProfessional.status).toBe(403);
+      expect(missing.status).toBe(400);
+      expect(bookingRows).toHaveLength(0);
+    });
+
+    test("when two members request the same slot, only the first is booked", async () => {
+      const { user: firstMember, token: firstToken } = addUser("member", "America/New_York");
+      const { token: secondToken } = addUser("member", "Europe/London");
+      const { user: professional } = addUser("professional", "Asia/Kolkata");
+      scheduleEveryDay(professional.id);
+      const profile = await request(app)
+        .get(`/api/professionals/${professional.id}`)
+        .set("Authorization", `Bearer ${firstToken}`);
+      const [slot] = profile.body.slots;
+
+      const first = await bookingRequest(firstToken, professional.id, { starts_at: slot.start });
+      const second = await bookingRequest(secondToken, professional.id, { starts_at: slot.start });
+
+      expect(first.status).toBe(201);
+      expect(second.status).toBe(409);
+      expect(second.body.error).toBe("That session is no longer available");
+      expect(bookingRows).toHaveLength(1);
+      expect(bookingRows[0].member_id).toBe(firstMember.id);
+    });
+
+    test("returns 409 and writes nothing when the database rejects a slot that passed the pre-check", async () => {
+      const { token } = addUser("member", "America/New_York");
+      const { user: professional } = addUser("professional", "Asia/Kolkata");
+      scheduleEveryDay(professional.id);
+      const profile = await request(app)
+        .get(`/api/professionals/${professional.id}`)
+        .set("Authorization", `Bearer ${token}`);
+      const [slot] = profile.body.slots;
+      rejectNextBooking = true;
+
+      const response = await bookingRequest(token, professional.id, { starts_at: slot.start });
+
+      expect(response.status).toBe(409);
+      expect(bookingRows).toHaveLength(0);
+    });
   });
 });

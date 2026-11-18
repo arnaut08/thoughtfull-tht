@@ -23,3 +23,16 @@ export async function getBookingsOverlapping(professionalId, from, to) {
   if (error) throw error;
   return data;
 }
+
+// Books a session via the book_session SQL function. Throws with message "slot_unavailable" if it overlaps a booking.
+export async function bookSession({ professionalId, memberId, startsAt, endsAt }) {
+  const { data, error } = await supabase.rpc("book_session", {
+    p_professional_id: professionalId,
+    p_member_id: memberId,
+    p_starts_at: startsAt,
+    p_ends_at: endsAt,
+  });
+
+  if (error) throw error;
+  return data;
+}
