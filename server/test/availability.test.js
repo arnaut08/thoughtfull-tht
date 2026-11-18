@@ -195,6 +195,59 @@ describe("GET /api/bookings", () => {
   });
 });
 
+describe("GET /api/professional-bookings", () => {
+  test("lists booked sessions with the member's name alongside open slots, in the professional's timezone", async () => {
+    const { token, user: professional } = addUser("professional", "Asia/Kolkata");
+    const { user: member } = addUser("member", "America/New_York");
+    for (let day_of_week = 0; day_of_week < 7; day_of_week += 1) {
+      availabilityRows.push({
+        id: randomUUID(),
+        professional_id: professional.id,
+        day_of_week,
+        start_time: "09:00:00",
+        end_time: "12:00:00",
+      });
+    }
+
+    const bookedStart = DateTime.now().setZone("Asia/Kolkata").plus({ days: 1 }).startOf("day").set({ hour: 9 }).toUTC();
+    bookingRows.push({
+      professional_id: professional.id,
+      member_id: member.id,
+      starts_at: bookedStart.toISO(),
+      ends_at: bookedStart.plus({ minutes: 50 }).toISO(),
+    });
+
+    const response = await request(app).get("/api/professional-bookings").set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.timezone).toBe("Asia/Kolkata");
+
+    const { slots } = response.body;
+    const starts = slots.map((slot) => DateTime.fromISO(slot.start).toMillis());
+    expect(starts).toEqual([...starts].sort((a, b) => a - b));
+    expect(slots.every((slot) => slot.start.endsWith("+05:30"))).toBe(true);
+
+    const booked = slots.find((slot) => DateTime.fromISO(slot.start).toMillis() === bookedStart.toMillis());
+    expect(booked).toEqual({
+      start: bookedStart.setZone("Asia/Kolkata").toISO(),
+      end: bookedStart.plus({ minutes: 50 }).setZone("Asia/Kolkata").toISO(),
+      member: { id: member.id, name: "member" },
+    });
+
+    const open = slots.filter((slot) => slot.member === null);
+    expect(open.length).toBeGreaterThan(0);
+    expect(open.map((slot) => DateTime.fromISO(slot.start).toMillis())).not.toContain(bookedStart.toMillis());
+  });
+
+  test("rejects members", async () => {
+    const { token } = addUser("member", "Europe/London");
+
+    const response = await request(app).get("/api/professional-bookings").set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(403);
+  });
+});
+
 describe("normalizeRules", () => {
   test("merges overlapping and adjacent windows on the same day and sorts the result", () => {
     const { rules } = normalizeRules([

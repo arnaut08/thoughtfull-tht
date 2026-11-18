@@ -154,6 +154,29 @@ h1 {
   padding: 0.25rem 0.5rem;
 }
 
+/* Booked sessions are solid teal with white text so they stand out from open slots. */
+.session-calendar .fc-event.session-booked {
+  background-color: #0f766e !important;
+  color: #ffffff !important;
+}
+
+.session-calendar .fc-event.session-booked .fc-event-main {
+  color: #ffffff !important;
+}
+
+/* Open slots are greyed out with muted text and a dashed outline. */
+.session-calendar .fc-event.session-open {
+  background-color: #f1f0ee !important;
+  box-shadow: none;
+  outline: 1px dashed #c4bfb9;
+  outline-offset: -1px;
+}
+
+.session-calendar .fc-event.session-open .fc-event-main {
+  color: #8a837c !important;
+  font-weight: 400;
+}
+
 /* Global FullCalendar overrides. !important is used so these beat FullCalendar's built-in theme styles. */
 
 /* Primary buttons: soft teal, no border, pill shape. */

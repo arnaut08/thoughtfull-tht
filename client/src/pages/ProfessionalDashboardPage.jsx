@@ -5,84 +5,127 @@ import {
   Button,
   Card,
   CardContent,
-  Divider,
   Skeleton,
   Stack,
   Typography,
 } from "@mui/material";
 import EditCalendarOutlinedIcon from "@mui/icons-material/EditCalendarOutlined";
+import FullCalendar from "@fullcalendar/react";
+import timeGridPlugin from "@fullcalendar/timegrid";
 import { fetchAvailability } from "../api/availability.js";
-import { DAY_NAMES } from "../lib/schedule.js";
+import { fetchProfessionalBookings } from "../api/bookings.js";
 
 function WelcomeCard({ user, onSetAvailability }) {
   const firstName = user.name.trim().split(/\s+/)[0];
 
   return (
     <Card>
-      <CardContent sx={{ p: { xs: 3, sm: 5 } }}>
-        <Stack spacing={2} alignItems="flex-start" sx={{ maxWidth: 560 }}>
-          <EditCalendarOutlinedIcon sx={{ fontSize: 48, color: "primary.main" }} />
-          <Typography variant="h5" component="h2">
-            Welcome to Thoughtfull-THT, {firstName}!
-          </Typography>
-          <Typography color="text.secondary">
-            Set your weekly availability so members can see when you're free and book sessions with
-            you. You can change it at any time.
-          </Typography>
-          <Button variant="contained" size="large" onClick={onSetAvailability}>
+      <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", sm: "64px minmax(0, 1fr) auto" },
+            alignItems: "center",
+            gap: 3,
+          }}
+        >
+          <Box
+            sx={{
+              display: "grid",
+              placeItems: "center",
+              width: 64,
+              height: 64,
+              borderRadius: "50%",
+              bgcolor: "#eff7f6",
+              color: "#13595e",
+            }}
+          >
+            <EditCalendarOutlinedIcon sx={{ fontSize: 32 }} />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="h6" component="h2" sx={{ color: "#0b3538", fontWeight: 600 }}>
+              Welcome to Thoughtfull-THT, {firstName}!
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Set your weekly availability so members can see when you're free and book sessions
+              with you. You can change it at any time.
+            </Typography>
+          </Box>
+          <Button
+            variant="contained"
+            size="small"
+            onClick={onSetAvailability}
+            sx={{
+              whiteSpace: "nowrap",
+              px: 2,
+              bgcolor: "#13595e",
+              "&:hover": { bgcolor: "#0e474b" },
+            }}
+          >
             Set your availability
           </Button>
-        </Stack>
+        </Box>
       </CardContent>
     </Card>
   );
 }
 
-function AvailabilitySummary({ timezone, rules, onEdit }) {
+// The server returns times in the professional's zone. Dropping the offset makes FullCalendar
+// show that wall-clock time, whatever zone the browser is in.
+function toWallClock(iso) {
+  return iso.slice(0, 19);
+}
+
+function toCalendarEvents(slots) {
+  return slots.map((slot) => {
+    const open = slot.member === null;
+    return {
+      title: open ? "Open" : slot.member.name,
+      start: toWallClock(slot.start),
+      end: toWallClock(slot.end),
+      classNames: [open ? "session-open" : "session-booked"],
+    };
+  });
+}
+
+function UpcomingSessionsCard({ bookings, loadError }) {
+  let body;
+  if (loadError) {
+    body = <Alert severity="error">{loadError}</Alert>;
+  } else if (!bookings) {
+    body = <Skeleton variant="rounded" height={480} aria-busy="true" />;
+  } else {
+    body = (
+      <div className="session-calendar">
+        <FullCalendar
+          plugins={[timeGridPlugin]}
+          initialView="timeGridWeek"
+          headerToolbar={{
+            left: "prev,next today",
+            center: "title",
+            right: "timeGridWeek,timeGridDay",
+          }}
+          allDaySlot={false}
+          scrollTime="08:00:00"
+          nowIndicator
+          height="auto"
+          eventTimeFormat={{ hour: "numeric", minute: "2-digit", meridiem: "short" }}
+          events={toCalendarEvents(bookings.slots)}
+        />
+      </div>
+    );
+  }
+
   return (
     <Card>
       <CardContent sx={{ p: 3 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
-          <Box>
-            <Typography variant="h6" component="h2">
-              Your weekly availability
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Times are in {timezone}
-            </Typography>
-          </Box>
-          <Button
-            variant="outlined"
-            onClick={onEdit}
-            sx={{
-              color: "#13595e",
-              borderColor: "#13595e",
-              "&:hover": { borderColor: "#0e474b", bgcolor: "#eff7f6" },
-            }}
-          >
-            Edit availability
-          </Button>
-        </Stack>
-
-        <Divider sx={{ my: 2 }} />
-
-        <Stack divider={<Divider flexItem />} spacing={1.5}>
-          {DAY_NAMES.map((dayName, day) => {
-            const windows = rules.filter((rule) => rule.day_of_week === day);
-            return (
-              <Stack key={dayName} direction="row" justifyContent="space-between" spacing={2}>
-                <Typography sx={{ fontWeight: 600 }}>{dayName}</Typography>
-                {windows.length === 0 ? (
-                  <Typography color="text.secondary">Unavailable</Typography>
-                ) : (
-                  <Typography sx={{ textAlign: "right" }}>
-                    {windows.map((rule) => `${rule.start_time}–${rule.end_time}`).join(", ")}
-                  </Typography>
-                )}
-              </Stack>
-            );
-          })}
-        </Stack>
+        <Typography variant="h6" component="h2">
+          Upcoming sessions
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Next 4 weeks · Times are in {bookings?.timezone ?? "your timezone"}
+        </Typography>
+        <Box sx={{ mt: 3 }}>{body}</Box>
       </CardContent>
     </Card>
   );
@@ -91,55 +134,27 @@ function AvailabilitySummary({ timezone, rules, onEdit }) {
 export default function ProfessionalDashboardPage({ token, user, onEditAvailability }) {
   const [schedule, setSchedule] = useState(null);
   const [loadError, setLoadError] = useState("");
+  const [bookings, setBookings] = useState(null);
+  const [bookingsError, setBookingsError] = useState("");
 
   useEffect(() => {
     let active = true;
     fetchAvailability(token)
       .then((data) => active && setSchedule(data))
       .catch((error) => active && setLoadError(error.message));
+    fetchProfessionalBookings(token)
+      .then((data) => active && setBookings(data))
+      .catch((error) => active && setBookingsError(error.message));
     return () => {
       active = false;
     };
   }, [token]);
 
-  let content;
+  let content = null;
   if (loadError) {
     content = <Alert severity="error">{loadError}</Alert>;
-  } else if (!schedule) {
-    content = (
-      <Card aria-busy="true" aria-live="polite">
-        <CardContent sx={{ p: 3 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
-            <Box sx={{ flex: 1 }}>
-              <Skeleton variant="text" sx={{ fontSize: "1.25rem", width: 220 }} />
-              <Skeleton variant="text" width={160} />
-            </Box>
-            <Skeleton variant="rounded" width={150} height={36} />
-          </Stack>
-
-          <Divider sx={{ my: 2 }} />
-
-          <Stack spacing={1.5}>
-            {DAY_NAMES.map((dayName) => (
-              <Stack key={dayName} direction="row" justifyContent="space-between" spacing={2}>
-                <Skeleton variant="text" width={90} />
-                <Skeleton variant="text" width={120} />
-              </Stack>
-            ))}
-          </Stack>
-        </CardContent>
-      </Card>
-    );
-  } else if (schedule.rules.length === 0) {
+  } else if (schedule && schedule.rules.length === 0) {
     content = <WelcomeCard user={user} onSetAvailability={onEditAvailability} />;
-  } else {
-    content = (
-      <AvailabilitySummary
-        timezone={schedule.timezone}
-        rules={schedule.rules}
-        onEdit={onEditAvailability}
-      />
-    );
   }
 
   return (
@@ -151,6 +166,9 @@ export default function ProfessionalDashboardPage({ token, user, onEditAvailabil
         <Typography color="text.secondary">Signed in as {user.name}</Typography>
       </Box>
       {content}
+      {schedule?.rules.length > 0 && (
+        <UpcomingSessionsCard bookings={bookings} loadError={bookingsError} />
+      )}
     </Stack>
   );
 }

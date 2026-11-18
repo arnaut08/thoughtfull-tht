@@ -117,6 +117,14 @@ Members browse professionals and see their open sessions. Any signed-in user can
 - A session is upcoming until it ends, so one in progress is listed as upcoming. `upcoming` is sorted soonest first, and `past` is sorted most recent first.
 - The profile page shows these lists under the member's profile card.
 
+### Professional sessions
+
+| Method | Path                        | Auth   | Description |
+| ------ | --------------------------- | ------ | ----------- |
+| GET    | `/api/professional-bookings` | Bearer (`professional`) | Returns `{ timezone, slots }` covering the next 4 weeks, soonest first. Each entry is `{ start, end, member }` with ISO timestamps in the professional's zone. `member` is `{ id, name }` for a booked session and `null` for an open slot. 403 for members. |
+
+- The professional dashboard shows these in a week calendar (FullCalendar). Open slots are greyed out.
+
 
 Run the server tests from `server/` with `npm test`.
 The server loads `server/.env` when starting; set `PORT` there (or in the
