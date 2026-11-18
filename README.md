@@ -108,6 +108,15 @@ Members browse professionals and see their open sessions. Any signed-in user can
   which replaces the version in `0004`). It locks the professional's row so two members can't take the same
   session, and the member's row so one member can't take overlapping sessions with two professionals at once.
 
+### Member sessions
+
+| Method | Path            | Auth   | Description |
+| ------ | --------------- | ------ | ----------- |
+| GET    | `/api/bookings` | Bearer (`member`) | Returns `{ timezone, upcoming, past }`. Each entry is `{ professional: { id, name, timezone }, start, end }` with ISO timestamps in the member's zone. 403 for professionals. |
+
+- A session is upcoming until it ends, so one in progress is listed as upcoming. `upcoming` is sorted soonest first, and `past` is sorted most recent first.
+- The profile page shows these lists under the member's profile card.
+
 
 Run the server tests from `server/` with `npm test`.
 The server loads `server/.env` when starting; set `PORT` there (or in the
