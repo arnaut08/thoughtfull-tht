@@ -48,14 +48,15 @@ export async function bookSession({ professionalId, memberId, startsAt, endsAt }
 }
 
 // Moves an existing booking to a new slot via the reschedule_session SQL function. Throws with the same
-// messages as bookSession, plus "booking_not_found" and "cancellation_closed".
-export async function rescheduleSession({ bookingId, professionalId, memberId, startsAt, endsAt }) {
+// messages as bookSession, plus "booking_not_found" and "cancellation_closed" (members only).
+export async function rescheduleSession({ bookingId, professionalId, memberId, startsAt, endsAt, byProfessional = false }) {
   const { data, error } = await supabase.rpc("reschedule_session", {
     p_booking_id: bookingId,
     p_professional_id: professionalId,
     p_member_id: memberId,
     p_starts_at: startsAt,
     p_ends_at: endsAt,
+    p_by_professional: byProfessional,
   });
 
   if (error) throw error;

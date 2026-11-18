@@ -13,7 +13,12 @@ import EditCalendarOutlinedIcon from "@mui/icons-material/EditCalendarOutlined";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import { fetchAvailability } from "../api/availability.js";
-import { fetchProfessionalBookings } from "../api/bookings.js";
+import {
+  cancelProfessionalBooking,
+  fetchProfessionalBookings,
+  rescheduleProfessionalBooking,
+} from "../api/bookings.js";
+import { formatSessionDate, formatSessionTime } from "../lib/schedule.js";
 
 function WelcomeCard({ user, onSetAvailability }) {
   const firstName = user.name.trim().split(/\s+/)[0];
@@ -80,6 +85,7 @@ function toCalendarEvents(slots) {
   return slots.map((slot) => {
     const open = slot.member === null;
     return {
+      id: slot.start,
       title: open ? "Open" : slot.member.name,
       start: toWallClock(slot.start),
       end: toWallClock(slot.end),
@@ -88,7 +94,7 @@ function toCalendarEvents(slots) {
   });
 }
 
-function UpcomingSessionsCard({ bookings, loadError }) {
+function UpcomingSessionsCard({ bookings, loadError, onEventClick, panel }) {
   let body;
   if (loadError) {
     body = <Alert severity="error">{loadError}</Alert>;
@@ -112,6 +118,7 @@ function UpcomingSessionsCard({ bookings, loadError }) {
           height="auto"
           eventTimeFormat={{ hour: "numeric", minute: "2-digit", meridiem: "short" }}
           events={toCalendarEvents(bookings.slots)}
+          eventClick={onEventClick}
         />
       </div>
     );
@@ -127,9 +134,69 @@ function UpcomingSessionsCard({ bookings, loadError }) {
           Next 4 weeks · Times are in {bookings?.timezone ?? "your timezone"}
         </Typography>
         <Box sx={{ mt: 3 }}>{body}</Box>
+        {panel}
       </CardContent>
     </Card>
   );
+}
+
+// Cancel or reschedule for the booked session the professional clicked on. Rescheduling only picks an open slot,
+// and the server moves the session in one step, so the member never loses their session without a new time.
+function SessionActions({ timezone, session, rescheduling, newSlot, working, handlers }) {
+  const rangeOf = (slot) =>
+    `${formatSessionDate(slot.start, timezone)}, ${formatSessionTime(slot.start, timezone)} – ${formatSessionTime(slot.end, timezone)}`;
+
+  if (rescheduling) {
+    return (
+      <Card>
+        <CardContent>
+          <Stack spacing={2}>
+            <Alert severity="info">
+              Rescheduling your session with <strong>{rescheduling.member.name}</strong>, currently{" "}
+              {rangeOf(rescheduling)}. Click an open session on the calendar for the new time.
+            </Alert>
+            {newSlot && (
+              <Typography>
+                New time: <strong>{rangeOf(newSlot)}</strong>
+              </Typography>
+            )}
+            <Stack direction="row" spacing={1}>
+              <Button variant="contained" onClick={handlers.onConfirmReschedule} disabled={!newSlot || working}>
+                {working ? "Rescheduling…" : "Confirm reschedule"}
+              </Button>
+              <Button onClick={handlers.onStopRescheduling} disabled={working}>
+                Stop
+              </Button>
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (session) {
+    return (
+      <Card>
+        <CardContent>
+          <Stack spacing={2}>
+            <Typography>
+              Session with <strong>{session.member.name}</strong> · {rangeOf(session)}
+            </Typography>
+            <Stack direction="row" spacing={1}>
+              <Button variant="outlined" onClick={handlers.onStartReschedule} disabled={working}>
+                Reschedule
+              </Button>
+              <Button color="error" variant="outlined" onClick={handlers.onCancelSession} disabled={working}>
+                {working ? "Cancelling…" : "Cancel session"}
+              </Button>
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return null;
 }
 
 export default function ProfessionalDashboardPage({ token, user, onEditAvailability }) {
@@ -137,6 +204,12 @@ export default function ProfessionalDashboardPage({ token, user, onEditAvailabil
   const [loadError, setLoadError] = useState("");
   const [bookings, setBookings] = useState(null);
   const [bookingsError, setBookingsError] = useState("");
+  const [selectedStart, setSelectedStart] = useState(null);
+  const [rescheduling, setRescheduling] = useState(null);
+  const [newStart, setNewStart] = useState(null);
+  const [working, setWorking] = useState(false);
+  const [actionError, setActionError] = useState("");
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -151,12 +224,106 @@ export default function ProfessionalDashboardPage({ token, user, onEditAvailabil
     };
   }, [token]);
 
+  const refreshBookings = () =>
+    fetchProfessionalBookings(token)
+      .then((data) => setBookings(data))
+      .catch((error) => setBookingsError(error.message));
+
+  const timezone = bookings?.timezone;
+  const findSlot = (start) => bookings?.slots.find((slot) => slot.start === start) ?? null;
+  const session = selectedStart ? findSlot(selectedStart) : null;
+
+  const handleEventClick = (info) => {
+    const slot = findSlot(info.event.id);
+    if (!slot) return;
+    setActionError("");
+    setNotice("");
+    if (rescheduling) {
+      if (slot.member) {
+        setActionError("Pick an open session for the new time.");
+        return;
+      }
+      setNewStart(slot);
+      return;
+    }
+    setSelectedStart(slot.member ? slot.start : null);
+  };
+
+  const startReschedule = () => {
+    setActionError("");
+    setNotice("");
+    setRescheduling(session);
+    setNewStart(null);
+    setSelectedStart(null);
+  };
+
+  const stopRescheduling = () => {
+    setRescheduling(null);
+    setNewStart(null);
+    setActionError("");
+  };
+
+  const confirmReschedule = async () => {
+    setWorking(true);
+    setActionError("");
+    try {
+      await rescheduleProfessionalBooking(token, rescheduling.id, newStart.start);
+      setNotice(`Session with ${rescheduling.member.name} moved to the new time.`);
+      setRescheduling(null);
+      setNewStart(null);
+      await refreshBookings();
+    } catch (error) {
+      setActionError(error.message);
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const cancelSession = async () => {
+    setWorking(true);
+    setActionError("");
+    try {
+      await cancelProfessionalBooking(token, session.id);
+      setNotice(`Session with ${session.member.name} cancelled.`);
+      setSelectedStart(null);
+      await refreshBookings();
+    } catch (error) {
+      setActionError(error.message);
+    } finally {
+      setWorking(false);
+    }
+  };
+
   let content = null;
   if (loadError) {
     content = <Alert severity="error">{loadError}</Alert>;
   } else if (schedule && schedule.rules.length === 0) {
     content = <WelcomeCard user={user} onSetAvailability={onEditAvailability} />;
   }
+
+  const panel = (
+    <Stack spacing={2} sx={{ mt: 3 }}>
+      {notice && (
+        <Alert severity="success" onClose={() => setNotice("")}>
+          {notice}
+        </Alert>
+      )}
+      {actionError && <Alert severity="error">{actionError}</Alert>}
+      <SessionActions
+        timezone={timezone}
+        session={session}
+        rescheduling={rescheduling}
+        newSlot={newStart}
+        working={working}
+        handlers={{
+          onStartReschedule: startReschedule,
+          onStopRescheduling: stopRescheduling,
+          onConfirmReschedule: confirmReschedule,
+          onCancelSession: cancelSession,
+        }}
+      />
+    </Stack>
+  );
 
   return (
     <Stack spacing={3}>
@@ -168,7 +335,12 @@ export default function ProfessionalDashboardPage({ token, user, onEditAvailabil
       </Box>
       {content}
       {schedule?.rules.length > 0 && (
-        <UpcomingSessionsCard bookings={bookings} loadError={bookingsError} />
+        <UpcomingSessionsCard
+          bookings={bookings}
+          loadError={bookingsError}
+          onEventClick={handleEventClick}
+          panel={panel}
+        />
       )}
     </Stack>
   );

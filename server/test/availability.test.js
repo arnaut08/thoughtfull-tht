@@ -86,7 +86,7 @@ const fakeSupabase = {
         (row) => row.id === bookingId && row.professional_id === professionalId && row.member_id === memberId,
       );
       if (!booking) return { data: null, error: { message: "booking_not_found" } };
-      if (DateTime.fromISO(booking.starts_at) <= DateTime.utc().plus({ hours: 24 })) {
+      if (!args.p_by_professional && DateTime.fromISO(booking.starts_at) <= DateTime.utc().plus({ hours: 24 })) {
         return { data: null, error: { message: "cancellation_closed" } };
       }
       const overlaps = (column, id) =>
@@ -332,7 +332,9 @@ describe("GET /api/professional-bookings", () => {
     }
 
     const bookedStart = DateTime.now().setZone("Asia/Kolkata").plus({ days: 1 }).startOf("day").set({ hour: 9 }).toUTC();
+    const bookedId = randomUUID();
     bookingRows.push({
+      id: bookedId,
       professional_id: professional.id,
       member_id: member.id,
       starts_at: bookedStart.toISO(),
@@ -351,6 +353,7 @@ describe("GET /api/professional-bookings", () => {
 
     const booked = slots.find((slot) => DateTime.fromISO(slot.start).toMillis() === bookedStart.toMillis());
     expect(booked).toEqual({
+      id: bookedId,
       start: bookedStart.setZone("Asia/Kolkata").toISO(),
       end: bookedStart.plus({ minutes: 50 }).setZone("Asia/Kolkata").toISO(),
       member: { id: member.id, name: "member" },
@@ -367,6 +370,100 @@ describe("GET /api/professional-bookings", () => {
     const response = await request(app).get("/api/professional-bookings").set("Authorization", `Bearer ${token}`);
 
     expect(response.status).toBe(403);
+  });
+});
+
+describe("professional cancel and reschedule", () => {
+  const sessionIn = (member, professional, hoursFromNow) => {
+    const start = DateTime.utc().plus({ hours: hoursFromNow }).startOf("hour");
+    return {
+      id: randomUUID(),
+      professional_id: professional.id,
+      member_id: member.id,
+      starts_at: start.toISO(),
+      ends_at: start.plus({ minutes: 50 }).toISO(),
+    };
+  };
+
+  function setup(hoursFromNow = 2) {
+    const { token, user: professional } = addUser("professional", "Asia/Kolkata");
+    const { user: member } = addUser("member", "America/New_York");
+    for (let day_of_week = 0; day_of_week < 7; day_of_week += 1) {
+      availabilityRows.push({
+        id: randomUUID(),
+        professional_id: professional.id,
+        day_of_week,
+        start_time: "09:00:00",
+        end_time: "12:00:00",
+      });
+    }
+    const session = sessionIn(member, professional, hoursFromNow);
+    bookingRows.push(session);
+    return { token, professional, member, session };
+  }
+
+  test("cancels a session that starts within 24 hours", async () => {
+    const { token, session } = setup(2);
+
+    const response = await request(app)
+      .delete(`/api/professional-bookings/${session.id}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(204);
+    expect(bookingRows).toHaveLength(0);
+  });
+
+  test("returns 404 and keeps the session when another professional tries to cancel it", async () => {
+    const { session } = setup(2);
+    const { token: otherToken } = addUser("professional", "Europe/London");
+
+    const response = await request(app)
+      .delete(`/api/professional-bookings/${session.id}`)
+      .set("Authorization", `Bearer ${otherToken}`);
+
+    expect(response.status).toBe(404);
+    expect(bookingRows).toHaveLength(1);
+  });
+
+  test("moves a session that starts within 24 hours to an open slot, keeping the same session", async () => {
+    const { token, professional, session } = setup(2);
+    const calendar = await request(app).get("/api/professional-bookings").set("Authorization", `Bearer ${token}`);
+    const target = calendar.body.slots.find((slot) => slot.member === null);
+    expect(calendar.body.slots.find((slot) => slot.id === session.id)).toMatchObject({ member: expect.any(Object) });
+
+    const response = await request(app)
+      .post(`/api/professional-bookings/${session.id}/reschedule`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ starts_at: target.start });
+
+    expect(response.status).toBe(200);
+    expect(response.body.booking.start).toBe(target.start);
+    expect(bookingRows).toHaveLength(1);
+    expect(bookingRows[0]).toMatchObject({ id: session.id, professional_id: professional.id });
+    expect(DateTime.fromISO(bookingRows[0].starts_at).toMillis()).toBe(DateTime.fromISO(target.start).toMillis());
+  });
+
+  test("refuses a new time the member already has with another professional and leaves the session unchanged", async () => {
+    const { token, member, session } = setup(2);
+    const calendar = await request(app).get("/api/professional-bookings").set("Authorization", `Bearer ${token}`);
+    const target = calendar.body.slots.find((slot) => slot.member === null);
+    const start = DateTime.fromISO(target.start).toUTC();
+    bookingRows.push({
+      id: randomUUID(),
+      professional_id: randomUUID(),
+      member_id: member.id,
+      starts_at: start.toISO(),
+      ends_at: start.plus({ minutes: 50 }).toISO(),
+    });
+    const originalStart = session.starts_at;
+
+    const response = await request(app)
+      .post(`/api/professional-bookings/${session.id}/reschedule`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ starts_at: target.start });
+
+    expect(response.status).toBe(409);
+    expect(bookingRows.find((row) => row.id === session.id).starts_at).toBe(originalStart);
   });
 });
 

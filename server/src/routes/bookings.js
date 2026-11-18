@@ -9,11 +9,14 @@ import { SLOT_HORIZON_DAYS, generateOpenSlots } from "../lib/slots.js";
 import { getRulesForProfessional } from "../services/availability.js";
 import {
   deleteBookingForMember,
+  deleteBookingForProfessional,
   getBookingForMember,
+  getBookingForProfessional,
   getBookingsForMember,
 } from "../services/bookings.js";
-import { getProfessionalBookingsOverlapping } from "../services/professionals.js";
+import { getProfessionalBookingsOverlapping, rescheduleSession } from "../services/professionals.js";
 import { findUserById, findUsersByIds } from "../services/users.js";
+import { loadOpenSlots } from "./professionals.js";
 
 export const bookingsRouter = Router();
 export const professionalBookingsRouter = Router();
@@ -91,7 +94,7 @@ bookingsRouter.delete("/:id", async (request, response) => {
 professionalBookingsRouter.use(requireAuth, requireProfessional);
 
 // Every session over the next SLOT_HORIZON_DAYS, soonest first, in the professional's zone.
-// Booked sessions carry the member; open slots have member: null.
+// Booked sessions carry the member and their booking id; open slots have member: null and id: null.
 professionalBookingsRouter.get("/", async (request, response) => {
   const professional = await findUserById(request.user.id);
   if (!professional) {
@@ -121,19 +124,97 @@ professionalBookingsRouter.get("/", async (request, response) => {
     now,
     horizonEnd,
     booked: bookings.map(toInterval),
-  }).map((slot) => ({ ...slot, member: null }));
+  }).map((slot) => ({ ...slot, id: null, member: null }));
   const bookedSessions = bookings.map((booking) => ({
     ...toInterval(booking),
+    id: booking.id,
     member: members.get(booking.member_id),
   }));
 
   const slots = [...openSlots, ...bookedSessions]
     .sort((a, b) => a.start.toMillis() - b.start.toMillis())
-    .map(({ start, end, member }) => ({
+    .map(({ id, start, end, member }) => ({
+      id,
       start: start.setZone(professional.timezone).toISO(),
       end: end.setZone(professional.timezone).toISO(),
       member: member ? { id: member.id, name: member.name } : null,
     }));
 
   response.json({ timezone: professional.timezone, slots });
+});
+
+// Cancels one of the professional's sessions. Unlike members, professionals have no 24-hour notice limit.
+professionalBookingsRouter.delete("/:id", async (request, response) => {
+  const bookingId = request.params.id;
+  if (!UUID_PATTERN.test(bookingId)) {
+    return response.status(404).json({ error: "Session not found" });
+  }
+
+  const deleted = await deleteBookingForProfessional(bookingId, request.user.id);
+  if (!deleted) {
+    return response.status(404).json({ error: "Session not found" });
+  }
+
+  response.status(204).end();
+});
+
+// Moves one of the professional's sessions to an open slot. The move is a single atomic update, so the member
+// keeps a session throughout. The slot must be free for both the professional and the member.
+professionalBookingsRouter.post("/:id/reschedule", async (request, response) => {
+  const startsAtInput = request.body?.starts_at;
+  const startsAt = typeof startsAtInput === "string" ? DateTime.fromISO(startsAtInput) : null;
+  if (!startsAt?.isValid) {
+    return response.status(400).json({ error: "starts_at must be an ISO timestamp" });
+  }
+
+  const bookingId = request.params.id;
+  if (!UUID_PATTERN.test(bookingId)) {
+    return response.status(404).json({ error: "Session not found" });
+  }
+
+  const professional = await findUserById(request.user.id);
+  if (!professional) {
+    return response.status(404).json({ error: "User not found" });
+  }
+  const booking = await getBookingForProfessional(bookingId, professional.id);
+  if (!booking) {
+    return response.status(404).json({ error: "Session not found" });
+  }
+  const member = await findUserById(booking.member_id);
+
+  const slots = await loadOpenSlots(professional, member, DateTime.utc(), booking.id);
+  const slot = slots.find((candidate) => candidate.start.toMillis() === startsAt.toMillis());
+  if (!slot) {
+    return response.status(409).json({ error: "That session is no longer available" });
+  }
+
+  try {
+    await rescheduleSession({
+      bookingId: booking.id,
+      professionalId: professional.id,
+      memberId: member.id,
+      startsAt: slot.start.toUTC().toISO(),
+      endsAt: slot.end.toUTC().toISO(),
+      byProfessional: true,
+    });
+  } catch (error) {
+    if (error.message === "booking_not_found") {
+      return response.status(404).json({ error: "Session not found" });
+    }
+    if (error.message === "member_conflict") {
+      return response.status(409).json({ error: "The member already has a session at this time" });
+    }
+    if (error.message === "slot_unavailable" || error.message === "slot_in_past") {
+      return response.status(409).json({ error: "That session is no longer available" });
+    }
+    throw error;
+  }
+
+  response.json({
+    booking: {
+      member: { id: member.id, name: member.name },
+      start: slot.start.setZone(professional.timezone).toISO(),
+      end: slot.end.setZone(professional.timezone).toISO(),
+    },
+  });
 });

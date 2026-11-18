@@ -38,7 +38,7 @@ async function findMemberBookingWithProfessional(bookingId, member, professional
 // Open sessions over the next SLOT_HORIZON_DAYS, as DateTimes in the professional's zone.
 // Sessions that overlap the member's bookings with any professional are excluded too.
 // excludeBookingId is the session being rescheduled, so it doesn't block its own time.
-async function loadOpenSlots(professional, member, now, excludeBookingId) {
+export async function loadOpenSlots(professional, member, now, excludeBookingId) {
   const horizonEnd = now.plus({ days: SLOT_HORIZON_DAYS });
   const [rows, professionalBookings, memberBookings] = await Promise.all([
     getRulesForProfessional(professional.id),
