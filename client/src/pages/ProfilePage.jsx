@@ -25,8 +25,8 @@ function SessionRowSkeleton() {
   );
 }
 
-// sessions is null while loading, which shows skeleton rows. onCancel is passed only for upcoming sessions.
-function SessionGroup({ title, sessions, timezone, emptyText, onCancel, cancelingId }) {
+// sessions is null while loading, which shows skeleton rows. onCancel and onReschedule are passed only for upcoming sessions.
+function SessionGroup({ title, sessions, timezone, emptyText, onCancel, onReschedule, cancelingId }) {
   return (
     <Box>
       <Typography variant="subtitle1" component="h3" fontWeight={600}>
@@ -66,17 +66,26 @@ function SessionGroup({ title, sessions, timezone, emptyText, onCancel, cancelin
               </Box>
               {onCancel &&
                 (session.cancellable ? (
-                  <Button
-                    color="error"
-                    size="small"
-                    disabled={cancelingId !== null}
-                    onClick={() => onCancel(session)}
-                  >
-                    {cancelingId === session.id ? "Cancelling…" : "Cancel"}
-                  </Button>
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      size="small"
+                      disabled={cancelingId !== null}
+                      onClick={() => onReschedule(session)}
+                    >
+                      Reschedule
+                    </Button>
+                    <Button
+                      color="error"
+                      size="small"
+                      disabled={cancelingId !== null}
+                      onClick={() => onCancel(session)}
+                    >
+                      {cancelingId === session.id ? "Cancelling…" : "Cancel"}
+                    </Button>
+                  </Stack>
                 ) : (
                   <Typography variant="caption" color="text.secondary" sx={{ maxWidth: 160, textAlign: "right" }}>
-                    Starts within 24 hours, so it can't be cancelled.
+                    Starts within 24 hours, so it can't be changed.
                   </Typography>
                 ))}
             </Stack>
@@ -87,7 +96,7 @@ function SessionGroup({ title, sessions, timezone, emptyText, onCancel, cancelin
   );
 }
 
-export default function ProfilePage({ token, user }) {
+export default function ProfilePage({ token, user, onReschedule }) {
   const roleLabel = user.role === "professional" ? "Professional" : "Member";
   const isMember = user.role === "member";
   const [bookings, setBookings] = useState(null);
@@ -169,6 +178,7 @@ export default function ProfilePage({ token, user }) {
                   timezone={user.timezone}
                   emptyText="No upcoming sessions."
                   onCancel={handleCancel}
+                  onReschedule={onReschedule}
                   cancelingId={cancelingId}
                 />
                 <Divider />
