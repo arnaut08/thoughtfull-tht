@@ -46,7 +46,8 @@ The server won't start if either value is missing.
 
 Create the users table by running `server/migrations/0001_create_users.sql` in
 the Supabase SQL editor, then run `server/migrations/0002_create_availability_rules.sql`
-to create the availability table and its replace function.
+to create the availability table and its replace function, and
+`server/migrations/0003_create_bookings.sql` for the bookings table.
 
 ### Authentication
 
@@ -81,6 +82,21 @@ for a `professional` account (`member` gets 403).
 - Overlapping and adjacent windows on the same day are merged.
 - Times are stored and returned as local time with no conversion. Changing the
   profile timezone keeps local hours. See `DECISIONS.md`.
+
+### Booking slots
+
+Members browse professionals and see their open sessions. Any signed-in user can call these routes.
+
+| Method | Path                      | Auth   | Description |
+| ------ | ------------------------- | ------ | ----------- |
+| GET    | `/api/professionals`      | Bearer | Returns `{ professionals: [{ id, name, timezone }] }`. |
+| GET    | `/api/professionals/:id`  | Bearer | Returns `{ professional, timezone, slots }`. `timezone` is the caller's profile zone. `slots` is a list of `{ start, end }` ISO timestamps in that zone, covering the next 4 weeks. Booked sessions are excluded. 404 if `:id` is not a professional. |
+
+- Each slot is a 50-minute session. Sessions run back to back from the start of each
+  availability window and must fit entirely inside it.
+- Windows are generated in the professional's timezone, so DST changes are handled.
+  See `DECISIONS.md`.
+
 
 Run the server tests from `server/` with `npm test`.
 The server loads `server/.env` when starting; set `PORT` there (or in the
