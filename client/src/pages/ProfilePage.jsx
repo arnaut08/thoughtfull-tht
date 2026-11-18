@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Alert, Box, Card, CardContent, Chip, Divider, Skeleton, Stack, Typography } from "@mui/material";
 import NameAvatar from "../components/NameAvatar.jsx";
 import { fetchMemberBookings } from "../api/bookings.js";
+import { formatSessionDate, formatSessionTime } from "../lib/schedule.js";
 
 function DetailRow({ label, value }) {
   return (
@@ -22,23 +23,6 @@ function SessionRowSkeleton() {
       </Box>
     </Stack>
   );
-}
-
-function formatSessionDate(iso, timezone) {
-  return new Date(iso).toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    timeZone: timezone,
-  });
-}
-
-function formatSessionTime(iso, timezone) {
-  return new Date(iso).toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: timezone,
-  });
 }
 
 // sessions is null while loading, which shows skeleton rows.
