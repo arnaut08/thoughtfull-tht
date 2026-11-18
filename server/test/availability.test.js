@@ -9,6 +9,7 @@ const users = [];
 const availabilityRows = [];
 const bookingRows = [];
 let rejectNextBooking = false;
+let rejectNextBookingWith = "slot_unavailable";
 const tables = {
   users,
   availability_rules: availabilityRows,
@@ -47,16 +48,16 @@ const fakeSupabase = {
     if (name === "book_session") {
       if (rejectNextBooking) {
         rejectNextBooking = false;
-        return { data: null, error: { message: "slot_unavailable" } };
+        return { data: null, error: { message: rejectNextBookingWith } };
       }
       const { p_professional_id: professionalId, p_member_id: memberId, p_starts_at: startsAt, p_ends_at: endsAt } = args;
-      const overlaps = bookingRows.some(
-        (booking) =>
-          booking.professional_id === professionalId &&
-          booking.starts_at < endsAt &&
-          booking.ends_at > startsAt,
-      );
-      if (overlaps) return { data: null, error: { message: "slot_unavailable" } };
+      const overlaps = (column, id) =>
+        bookingRows.some(
+          (booking) => booking[column] === id && booking.starts_at < endsAt && booking.ends_at > startsAt,
+        );
+      if (DateTime.fromISO(startsAt) <= DateTime.utc()) return { data: null, error: { message: "slot_in_past" } };
+      if (overlaps("professional_id", professionalId)) return { data: null, error: { message: "slot_unavailable" } };
+      if (overlaps("member_id", memberId)) return { data: null, error: { message: "member_conflict" } };
       const booking = { professional_id: professionalId, member_id: memberId, starts_at: startsAt, ends_at: endsAt };
       bookingRows.push(booking);
       return { data: booking, error: null };
@@ -110,6 +111,7 @@ beforeEach(() => {
   availabilityRows.length = 0;
   bookingRows.length = 0;
   rejectNextBooking = false;
+  rejectNextBookingWith = "slot_unavailable";
 });
 
 describe("normalizeRules", () => {
@@ -414,6 +416,60 @@ describe("/api/professionals", () => {
       expect(second.body.error).toBe("That session is no longer available");
       expect(bookingRows).toHaveLength(1);
       expect(bookingRows[0].member_id).toBe(firstMember.id);
+    });
+
+    test("a member can't book a session that overlaps their booking with another professional", async () => {
+      const { token } = addUser("member", "America/New_York");
+      const { user: professionalA } = addUser("professional", "Asia/Kolkata");
+      const { user: professionalB } = addUser("professional", "Asia/Kolkata");
+      scheduleEveryDay(professionalA.id);
+      scheduleEveryDay(professionalB.id);
+      const profileA = await request(app)
+        .get(`/api/professionals/${professionalA.id}`)
+        .set("Authorization", `Bearer ${token}`);
+      const [slotA] = profileA.body.slots;
+      const booked = await bookingRequest(token, professionalA.id, { starts_at: slotA.start });
+
+      const profileB = await request(app)
+        .get(`/api/professionals/${professionalB.id}`)
+        .set("Authorization", `Bearer ${token}`);
+      const professionalBStarts = profileB.body.slots.map((slot) => slot.start);
+      const overlapping = await bookingRequest(token, professionalB.id, { starts_at: slotA.start });
+
+      expect(booked.status).toBe(201);
+      expect(professionalBStarts).not.toContain(slotA.start);
+      expect(overlapping.status).toBe(409);
+      expect(bookingRows).toHaveLength(1);
+    });
+
+    test("rejects a slot that has already started, even if it is a valid weekly time", async () => {
+      const { token } = addUser("member", "America/New_York");
+      const { user: professional } = addUser("professional", "Asia/Kolkata");
+      scheduleEveryDay(professional.id);
+      const pastStart = DateTime.utc().minus({ days: 1 }).startOf("hour").toISO();
+
+      const response = await bookingRequest(token, professional.id, { starts_at: pastStart });
+
+      expect(response.status).toBe(409);
+      expect(bookingRows).toHaveLength(0);
+    });
+
+    test("returns 409 with a member conflict message when the database rejects an overlapping member booking", async () => {
+      const { token } = addUser("member", "America/New_York");
+      const { user: professional } = addUser("professional", "Asia/Kolkata");
+      scheduleEveryDay(professional.id);
+      const profile = await request(app)
+        .get(`/api/professionals/${professional.id}`)
+        .set("Authorization", `Bearer ${token}`);
+      const [slot] = profile.body.slots;
+      rejectNextBooking = true;
+      rejectNextBookingWith = "member_conflict";
+
+      const response = await bookingRequest(token, professional.id, { starts_at: slot.start });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error).toBe("You already have a session booked at this time");
+      expect(bookingRows).toHaveLength(0);
     });
 
     test("returns 409 and writes nothing when the database rejects a slot that passed the pre-check", async () => {

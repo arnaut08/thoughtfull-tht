@@ -11,12 +11,11 @@ export async function listProfessionals() {
   return data;
 }
 
-// Returns bookings that overlap [from, to) for the professional, as ISO timestamps.
-export async function getBookingsOverlapping(professionalId, from, to) {
+async function getBookingsOverlapping(column, id, from, to) {
   const { data, error } = await supabase
     .from("bookings")
     .select("starts_at, ends_at")
-    .eq("professional_id", professionalId)
+    .eq(column, id)
     .lt("starts_at", to.toISO())
     .gt("ends_at", from.toISO());
 
@@ -24,7 +23,18 @@ export async function getBookingsOverlapping(professionalId, from, to) {
   return data;
 }
 
-// Books a session via the book_session SQL function. Throws with message "slot_unavailable" if it overlaps a booking.
+// Returns bookings that overlap [from, to) for the professional, as ISO timestamps.
+export function getProfessionalBookingsOverlapping(professionalId, from, to) {
+  return getBookingsOverlapping("professional_id", professionalId, from, to);
+}
+
+// Returns bookings that overlap [from, to) for the member, with any professional.
+export function getMemberBookingsOverlapping(memberId, from, to) {
+  return getBookingsOverlapping("member_id", memberId, from, to);
+}
+
+// Books a session via the book_session SQL function. Throws with message "slot_unavailable" if the professional
+// is already booked, or "member_conflict" if the member has an overlapping session with any professional.
 export async function bookSession({ professionalId, memberId, startsAt, endsAt }) {
   const { data, error } = await supabase.rpc("book_session", {
     p_professional_id: professionalId,

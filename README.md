@@ -99,12 +99,14 @@ Members browse professionals and see their open sessions. Any signed-in user can
 
 | Method | Path                           | Auth   | Description |
 | ------ | ------------------------------ | ------ | ----------- |
-| POST   | `/api/professionals/:id/bookings` | Bearer (`member`) | Body: `{ starts_at }`, the ISO `start` of an open slot. Returns 201 with `{ booking: { professional, start, end } }` in the member's zone. 409 if the time isn't an open slot or was just taken. 403 for professionals. 400 if `starts_at` isn't an ISO timestamp. |
+| POST   | `/api/professionals/:id/bookings` | Bearer (`member`) | Body: `{ starts_at }`, the ISO `start` of an open slot. Returns 201 with `{ booking: { professional, start, end } }` in the member's zone. 409 if the time isn't an open slot, was just taken, or overlaps another session the member has booked with any professional. 403 for professionals. 400 if `starts_at` isn't an ISO timestamp. |
 
 - Members pick a slot on the calendar, then confirm it. The start must match a
   currently open slot exactly, so arbitrary times are rejected.
-- Bookings are written by the `book_session` SQL function (`server/migrations/0004_create_book_session_function.sql`),
-  which locks the professional's row so two members can't take the same session.
+- Open slots exclude sessions that have already started, and `book_session` rejects a `starts_at` in the past (`slot_in_past`).
+- Bookings are written by the `book_session` SQL function (`server/migrations/0005_member_no_overlapping_bookings.sql`,
+  which replaces the version in `0004`). It locks the professional's row so two members can't take the same
+  session, and the member's row so one member can't take overlapping sessions with two professionals at once.
 
 
 Run the server tests from `server/` with `npm test`.
