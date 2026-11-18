@@ -8,12 +8,14 @@ process.env.JWT_EXPIRES_IN = "1h";
 const users = [];
 const availabilityRows = [];
 const bookingRows = [];
+const notificationRows = [];
 let rejectNextBooking = false;
 let rejectNextBookingWith = "slot_unavailable";
 const tables = {
   users,
   availability_rules: availabilityRows,
   bookings: bookingRows,
+  notifications: notificationRows,
 };
 
 const OPERATORS = {
@@ -21,16 +23,35 @@ const OPERATORS = {
   lt: (value, expected) => value < expected,
   gt: (value, expected) => value > expected,
   in: (value, expected) => expected.includes(value),
+  is: (value, expected) => value === expected,
 };
 
 // In-memory stand-in for the Supabase calls used by the services.
 function fakeQuery(table) {
   const filters = [];
   let deleting = false;
+  let updates = null;
+  let countOnly = false;
+  const sorts = [];
+  let limit = null;
   const matches = (row) => filters.every(([column, op, value]) => OPERATORS[op](row[column], value));
   const builder = {
-    select: () => builder,
-    order: () => builder,
+    select: (_columns, options) => {
+      countOnly = options?.head === true;
+      return builder;
+    },
+    order: (column, { ascending = true } = {}) => {
+      sorts.push({ column, ascending });
+      return builder;
+    },
+    limit: (count) => {
+      limit = count;
+      return builder;
+    },
+    update: (values) => {
+      updates = values;
+      return builder;
+    },
     delete: () => {
       deleting = true;
       return builder;
@@ -38,10 +59,22 @@ function fakeQuery(table) {
     maybeSingle: async () => ({ data: table.find(matches) ?? null, error: null }),
     then: (resolve, reject) => {
       let rows = table.filter(matches);
+      for (const sort of [...sorts].reverse()) {
+        const direction = sort.ascending ? 1 : -1;
+        rows = [...rows].sort((a, b) => (a[sort.column] < b[sort.column] ? -1 : a[sort.column] > b[sort.column] ? 1 : 0) * direction);
+      }
       if (deleting) {
         rows.forEach((row) => table.splice(table.indexOf(row), 1));
       }
-      return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
+      if (updates) {
+        rows.forEach((row) => Object.assign(row, updates));
+      }
+      const count = rows.length;
+      if (limit !== null) rows = rows.slice(0, limit);
+      if (countOnly) {
+        return Promise.resolve({ data: null, count, error: null }).then(resolve, reject);
+      }
+      return Promise.resolve({ data: rows, count, error: null }).then(resolve, reject);
     },
   };
   for (const op of Object.keys(OPERATORS)) {
@@ -56,6 +89,35 @@ function fakeQuery(table) {
 const fakeSupabase = {
   from: (name) => fakeQuery(tables[name]),
   rpc: async (name, args) => {
+    if (name === "cancel_session") {
+      const {
+        p_booking_id: bookingId,
+        p_professional_id: professionalId,
+        p_member_id: memberId,
+        p_by_professional: byProfessional,
+        p_notice_cutoff: noticeCutoff,
+      } = args;
+      const index = bookingRows.findIndex(
+        (row) => row.id === bookingId && row.professional_id === professionalId && row.member_id === memberId,
+      );
+      if (index === -1) return { data: null, error: { message: "booking_not_found" } };
+      const booking = bookingRows[index];
+      if (!byProfessional && DateTime.fromISO(booking.starts_at) <= DateTime.fromISO(noticeCutoff)) {
+        return { data: null, error: { message: "cancellation_closed" } };
+      }
+      bookingRows.splice(index, 1);
+      notificationRows.push({
+        id: randomUUID(),
+        recipient_id: byProfessional ? memberId : professionalId,
+        actor_id: byProfessional ? professionalId : memberId,
+        type: "session_cancelled",
+        session_starts_at: booking.starts_at,
+        new_starts_at: null,
+        read_at: null,
+        created_at: DateTime.utc().toISO(),
+      });
+      return { data: null, error: null };
+    }
     if (name === "book_session") {
       if (rejectNextBooking) {
         rejectNextBooking = false;
@@ -99,6 +161,16 @@ const fakeSupabase = {
         );
       if (overlaps("professional_id", professionalId)) return { data: null, error: { message: "slot_unavailable" } };
       if (overlaps("member_id", memberId)) return { data: null, error: { message: "member_conflict" } };
+      notificationRows.push({
+        id: randomUUID(),
+        recipient_id: args.p_by_professional ? memberId : professionalId,
+        actor_id: args.p_by_professional ? professionalId : memberId,
+        type: "session_rescheduled",
+        session_starts_at: booking.starts_at,
+        new_starts_at: startsAt,
+        read_at: null,
+        created_at: DateTime.utc().toISO(),
+      });
       booking.starts_at = startsAt;
       booking.ends_at = endsAt;
       return { data: booking, error: null };
@@ -151,6 +223,7 @@ beforeEach(() => {
   users.length = 0;
   availabilityRows.length = 0;
   bookingRows.length = 0;
+  notificationRows.length = 0;
   rejectNextBooking = false;
   rejectNextBookingWith = "slot_unavailable";
 });
@@ -955,5 +1028,133 @@ describe("/api/professionals", () => {
       expect(response.status).toBe(409);
       expect(bookingRows[0].starts_at).toBe(session.starts_at);
     });
+  });
+});
+
+describe("in-app notifications", () => {
+  const sessionIn = (member, professional, hoursFromNow) => {
+    const start = DateTime.utc().plus({ hours: hoursFromNow }).startOf("hour");
+    return {
+      id: randomUUID(),
+      professional_id: professional.id,
+      member_id: member.id,
+      starts_at: start.toISO(),
+      ends_at: start.plus({ minutes: 50 }).toISO(),
+    };
+  };
+
+  function setup() {
+    const { user: member, token: memberToken } = addUser("member", "America/New_York");
+    const { user: professional, token: professionalToken } = addUser("professional", "Asia/Kolkata");
+    for (let day_of_week = 0; day_of_week < 7; day_of_week += 1) {
+      availabilityRows.push({
+        id: randomUUID(),
+        professional_id: professional.id,
+        day_of_week,
+        start_time: "09:00:00",
+        end_time: "12:00:00",
+      });
+    }
+    return { member, memberToken, professional, professionalToken };
+  }
+
+  const inbox = (token) => request(app).get("/api/notifications").set("Authorization", `Bearer ${token}`);
+
+  test("a member cancelling notifies the professional, and only the professional", async () => {
+    const { member, memberToken, professional, professionalToken } = setup();
+    const session = sessionIn(member, professional, 48);
+    bookingRows.push(session);
+
+    const cancelled = await request(app)
+      .delete(`/api/bookings/${session.id}`)
+      .set("Authorization", `Bearer ${memberToken}`);
+    const professionalInbox = await inbox(professionalToken);
+    const memberInbox = await inbox(memberToken);
+
+    expect(cancelled.status).toBe(204);
+    expect(professionalInbox.body.unreadCount).toBe(1);
+    expect(professionalInbox.body.notifications).toEqual([
+      expect.objectContaining({
+        type: "session_cancelled",
+        actor: { id: member.id, name: "member" },
+        sessionStart: session.starts_at,
+        newStart: null,
+        read: false,
+      }),
+    ]);
+    expect(memberInbox.body.notifications).toEqual([]);
+  });
+
+  test("a professional cancelling notifies the member, with no notice limit", async () => {
+    const { member, memberToken, professional, professionalToken } = setup();
+    const session = sessionIn(member, professional, 2);
+    bookingRows.push(session);
+
+    const cancelled = await request(app)
+      .delete(`/api/professional-bookings/${session.id}`)
+      .set("Authorization", `Bearer ${professionalToken}`);
+    const memberInbox = await inbox(memberToken);
+
+    expect(cancelled.status).toBe(204);
+    expect(memberInbox.body.notifications).toEqual([
+      expect.objectContaining({ type: "session_cancelled", actor: { id: professional.id, name: "professional" } }),
+    ]);
+  });
+
+  test("a refused cancellation inside the notice window sends no notification", async () => {
+    const { member, memberToken, professional, professionalToken } = setup();
+    const session = sessionIn(member, professional, 5);
+    bookingRows.push(session);
+
+    const refused = await request(app)
+      .delete(`/api/bookings/${session.id}`)
+      .set("Authorization", `Bearer ${memberToken}`);
+
+    expect(refused.status).toBe(409);
+    expect((await inbox(professionalToken)).body.notifications).toEqual([]);
+  });
+
+  test("a member rescheduling notifies the professional with the old and new times", async () => {
+    const { member, memberToken, professional, professionalToken } = setup();
+    const session = sessionIn(member, professional, 72);
+    const originalStart = session.starts_at;
+    bookingRows.push(session);
+    const profile = await request(app)
+      .get(`/api/professionals/${professional.id}?reschedule=${session.id}`)
+      .set("Authorization", `Bearer ${memberToken}`);
+    const [target] = profile.body.slots;
+
+    const rescheduled = await request(app)
+      .post(`/api/professionals/${professional.id}/bookings/${session.id}/reschedule`)
+      .set("Authorization", `Bearer ${memberToken}`)
+      .send({ starts_at: target.start });
+    const professionalInbox = await inbox(professionalToken);
+
+    expect(rescheduled.status).toBe(200);
+    expect(professionalInbox.body.notifications).toEqual([
+      expect.objectContaining({
+        type: "session_rescheduled",
+        actor: { id: member.id, name: "member" },
+        sessionStart: originalStart,
+        newStart: DateTime.fromISO(target.start).toUTC().toISO(),
+      }),
+    ]);
+  });
+
+  test("marking notifications read clears the unread count and keeps the notifications", async () => {
+    const { member, memberToken, professional, professionalToken } = setup();
+    const session = sessionIn(member, professional, 48);
+    bookingRows.push(session);
+    await request(app).delete(`/api/bookings/${session.id}`).set("Authorization", `Bearer ${memberToken}`);
+
+    const marked = await request(app)
+      .post("/api/notifications/read")
+      .set("Authorization", `Bearer ${professionalToken}`);
+    const afterwards = await inbox(professionalToken);
+
+    expect(marked.status).toBe(204);
+    expect(afterwards.body.unreadCount).toBe(0);
+    expect(afterwards.body.notifications).toHaveLength(1);
+    expect(afterwards.body.notifications[0].read).toBe(true);
   });
 });
