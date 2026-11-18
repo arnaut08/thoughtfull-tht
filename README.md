@@ -45,7 +45,8 @@ API:
 The server won't start if either value is missing.
 
 Create the users table by running `server/migrations/0001_create_users.sql` in
-the Supabase SQL editor.
+the Supabase SQL editor, then run `server/migrations/0002_create_availability_rules.sql`
+to create the availability table and its replace function.
 
 ### Authentication
 
@@ -61,6 +62,25 @@ the token lifetime and defaults to `1h`. The server won't start without
 
 Send the token as `Authorization: Bearer <token>`. Timestamps are converted to
 the user's registered timezone with Luxon.
+
+### Availability
+
+Professionals set a recurring weekly schedule. All routes require a bearer token
+for a `professional` account (`member` gets 403).
+
+| Method | Path                 | Auth   | Description |
+| ------ | -------------------- | ------ | ----------- |
+| GET    | `/api/availability`  | Bearer | Returns `{ timezone, rules }`. `timezone` is the professional's profile zone. |
+| PUT    | `/api/availability`  | Bearer | Body: `{ rules: [{ day_of_week, start_time, end_time }] }`. Replaces the whole week. Returns `{ rules }`. |
+
+- `day_of_week`: `0` (Sunday) to `6` (Saturday).
+- `start_time` / `end_time`: `HH:mm` in the professional's local time. `end_time` may be `24:00`
+  for a window that runs to midnight.
+- Windows must be at least 50 minutes. Overnight windows (end before start) are
+  rejected; split them into two days.
+- Overlapping and adjacent windows on the same day are merged.
+- Times are stored and returned as local time with no conversion. Changing the
+  profile timezone keeps local hours. See `DECISIONS.md`.
 
 Run the server tests from `server/` with `npm test`.
 The server loads `server/.env` when starting; set `PORT` there (or in the
