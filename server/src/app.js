@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { authRouter } from "./routes/auth.js";
 import { availabilityRouter } from "./routes/availability.js";
+import { professionalsRouter } from "./routes/professionals.js";
 
 export function createApp() {
   const app = express();
@@ -15,6 +16,7 @@ export function createApp() {
 
   app.use("/api/auth", authRouter);
   app.use("/api/availability", availabilityRouter);
+  app.use("/api/professionals", professionalsRouter);
 
   return app;
 }
