@@ -16,7 +16,7 @@ export async function getBookingsForMember(memberId) {
 export async function getBookingForMember(bookingId, memberId) {
   const { data, error } = await supabase
     .from("bookings")
-    .select("id, starts_at, professional_id")
+    .select("id, starts_at, ends_at, professional_id")
     .eq("id", bookingId)
     .eq("member_id", memberId)
     .maybeSingle();

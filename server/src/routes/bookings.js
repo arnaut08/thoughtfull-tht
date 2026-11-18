@@ -4,6 +4,7 @@ import { requireAuth } from "../middleware/requireAuth.js";
 import { requireMember } from "../middleware/requireMember.js";
 import { requireProfessional } from "../middleware/requireProfessional.js";
 import { toApiRule } from "../lib/availability.js";
+import { isBeyondNotice, noticeClosedMessage, noticeCutoff } from "../lib/cancellation.js";
 import { SLOT_HORIZON_DAYS, generateOpenSlots } from "../lib/slots.js";
 import { getRulesForProfessional } from "../services/availability.js";
 import {
@@ -16,10 +17,6 @@ import { findUserById, findUsersByIds } from "../services/users.js";
 
 export const bookingsRouter = Router();
 export const professionalBookingsRouter = Router();
-
-// Members can cancel only sessions that start more than this many hours from now.
-const CANCELLATION_NOTICE_HOURS = 24;
-const CANCELLATION_CLOSED_ERROR = `Sessions can only be cancelled more than ${CANCELLATION_NOTICE_HOURS} hours before they start`;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -42,7 +39,6 @@ bookingsRouter.get("/", async (request, response) => {
   );
 
   const now = DateTime.utc();
-  const cancellationCutoff = now.plus({ hours: CANCELLATION_NOTICE_HOURS });
   const sessions = rows.map((row) => ({
     id: row.id,
     professional: professionals.get(row.professional_id),
@@ -54,7 +50,7 @@ bookingsRouter.get("/", async (request, response) => {
     professional: { id: professional.id, name: professional.name, timezone: professional.timezone },
     start: start.setZone(member.timezone).toISO(),
     end: end.setZone(member.timezone).toISO(),
-    cancellable: start > cancellationCutoff,
+    cancellable: isBeyondNotice(start, now),
   });
 
   response.json({
@@ -67,7 +63,7 @@ bookingsRouter.get("/", async (request, response) => {
   });
 });
 
-// Cancels one of the member's sessions. Sessions starting within CANCELLATION_NOTICE_HOURS are refused with 409.
+// Cancels one of the member's sessions. Sessions starting within the cancellation notice window are refused with 409.
 bookingsRouter.delete("/:id", async (request, response) => {
   const bookingId = request.params.id;
   if (!UUID_PATTERN.test(bookingId)) {
@@ -79,14 +75,14 @@ bookingsRouter.delete("/:id", async (request, response) => {
     return response.status(404).json({ error: "Session not found" });
   }
 
-  const cancellationCutoff = DateTime.utc().plus({ hours: CANCELLATION_NOTICE_HOURS });
+  const cancellationCutoff = noticeCutoff(DateTime.utc());
   if (DateTime.fromISO(booking.starts_at) <= cancellationCutoff) {
-    return response.status(409).json({ error: CANCELLATION_CLOSED_ERROR });
+    return response.status(409).json({ error: noticeClosedMessage("cancelled") });
   }
 
   const deleted = await deleteBookingForMember(bookingId, request.user.id, cancellationCutoff);
   if (!deleted) {
-    return response.status(409).json({ error: CANCELLATION_CLOSED_ERROR });
+    return response.status(409).json({ error: noticeClosedMessage("cancelled") });
   }
 
   response.status(204).end();
