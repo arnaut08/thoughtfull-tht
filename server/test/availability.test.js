@@ -55,6 +55,7 @@ const fakeSupabase = {
         bookingRows.some(
           (booking) => booking[column] === id && booking.starts_at < endsAt && booking.ends_at > startsAt,
         );
+      if (DateTime.fromISO(startsAt) <= DateTime.utc()) return { data: null, error: { message: "slot_in_past" } };
       if (overlaps("professional_id", professionalId)) return { data: null, error: { message: "slot_unavailable" } };
       if (overlaps("member_id", memberId)) return { data: null, error: { message: "member_conflict" } };
       const booking = { professional_id: professionalId, member_id: memberId, starts_at: startsAt, ends_at: endsAt };
@@ -439,6 +440,18 @@ describe("/api/professionals", () => {
       expect(professionalBStarts).not.toContain(slotA.start);
       expect(overlapping.status).toBe(409);
       expect(bookingRows).toHaveLength(1);
+    });
+
+    test("rejects a slot that has already started, even if it is a valid weekly time", async () => {
+      const { token } = addUser("member", "America/New_York");
+      const { user: professional } = addUser("professional", "Asia/Kolkata");
+      scheduleEveryDay(professional.id);
+      const pastStart = DateTime.utc().minus({ days: 1 }).startOf("hour").toISO();
+
+      const response = await bookingRequest(token, professional.id, { starts_at: pastStart });
+
+      expect(response.status).toBe(409);
+      expect(bookingRows).toHaveLength(0);
     });
 
     test("returns 409 with a member conflict message when the database rejects an overlapping member booking", async () => {

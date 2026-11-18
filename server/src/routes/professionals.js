@@ -116,7 +116,7 @@ professionalsRouter.post("/:id/bookings", requireMember, async (request, respons
     if (error.message === "member_conflict") {
       return response.status(409).json({ error: "You already have a session booked at this time" });
     }
-    if (error.message === "slot_unavailable") {
+    if (error.message === "slot_unavailable" || error.message === "slot_in_past") {
       return response.status(409).json({ error: "That session is no longer available" });
     }
     throw error;

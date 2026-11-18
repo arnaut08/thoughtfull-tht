@@ -103,7 +103,7 @@ Members browse professionals and see their open sessions. Any signed-in user can
 
 - Members pick a slot on the calendar, then confirm it. The start must match a
   currently open slot exactly, so arbitrary times are rejected.
-- Open slots exclude sessions that overlap the member's bookings with any professional.
+- Open slots exclude sessions that have already started, and `book_session` rejects a `starts_at` in the past (`slot_in_past`).
 - Bookings are written by the `book_session` SQL function (`server/migrations/0005_member_no_overlapping_bookings.sql`,
   which replaces the version in `0004`). It locks the professional's row so two members can't take the same
   session, and the member's row so one member can't take overlapping sessions with two professionals at once.

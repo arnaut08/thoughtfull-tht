@@ -13,6 +13,10 @@ as $$
 declare
   result public.bookings;
 begin
+  if p_starts_at <= now() then
+    raise exception 'slot_in_past';
+  end if;
+
   perform 1 from public.users where id = p_professional_id for update;
   if not found then
     raise exception 'professional % not found', p_professional_id;
