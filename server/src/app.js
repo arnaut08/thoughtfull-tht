@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import { authRouter } from "./routes/auth.js";
 import { availabilityRouter } from "./routes/availability.js";
-import { bookingsRouter } from "./routes/bookings.js";
+import { bookingsRouter, professionalBookingsRouter } from "./routes/bookings.js";
 import { professionalsRouter } from "./routes/professionals.js";
 
 export function createApp() {
@@ -18,6 +18,7 @@ export function createApp() {
   app.use("/api/auth", authRouter);
   app.use("/api/availability", availabilityRouter);
   app.use("/api/bookings", bookingsRouter);
+  app.use("/api/professional-bookings", professionalBookingsRouter);
   app.use("/api/professionals", professionalsRouter);
 
   return app;

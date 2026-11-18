@@ -14,7 +14,7 @@ export async function listProfessionals() {
 async function getBookingsOverlapping(column, id, from, to) {
   const { data, error } = await supabase
     .from("bookings")
-    .select("starts_at, ends_at")
+    .select("starts_at, ends_at, member_id")
     .eq(column, id)
     .lt("starts_at", to.toISO())
     .gt("ends_at", from.toISO());
