@@ -30,6 +30,11 @@
   `DELETE /api/bookings/:id` returns 409 otherwise. The delete repeats the start-time
   condition in the same statement, so a session can't be cancelled after the cutoff.
 - `GET /api/bookings` returns each session's `id` and a `cancellable` flag.
+- Rescheduling uses the same 24-hour rule, applied to the session being moved (its current
+  start), not the new slot. `POST /api/professionals/:id/bookings/:bookingId/reschedule` moves the
+  session atomically through `reschedule_session` (migration `0006_reschedule_session.sql`), which
+  must be run in Supabase. The new slot follows the normal booking rules, and the session's own time
+  is offered as open while rescheduling.
 
 ## Slot generation
 - Slots are built from the professional's local-time windows in the professional's
