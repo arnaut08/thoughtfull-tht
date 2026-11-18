@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Box, Button, Card, CardContent, CircularProgress, Stack, Typography } from "@mui/material";
+import { Box, CircularProgress } from "@mui/material";
 import AuthPage from "./pages/AuthPage.jsx";
 import AvailabilityPage from "./pages/AvailabilityPage.jsx";
+import MemberDashboardPage from "./pages/MemberDashboardPage.jsx";
 import { fetchCurrentUser } from "./api/auth.js";
 
 const TOKEN_KEY = "thoughtfull-tht.token";
@@ -51,25 +52,7 @@ function App() {
     return <AvailabilityPage token={token} user={user} onSignOut={handleSignOut} />;
   }
 
-  return (
-    <Box component="main" sx={{ minHeight: "100vh", display: "grid", placeItems: "center", p: 2, bgcolor: "#f5f5f5" }}>
-      <Card sx={{ width: "100%", maxWidth: 440 }}>
-        <CardContent sx={{ p: 4 }}>
-          <Stack spacing={2}>
-            <Typography variant="h5" component="h1">
-              Welcome, {user.name}
-            </Typography>
-            <Typography color="text.secondary">
-              Signed in as {user.email} ({user.role})
-            </Typography>
-            <Button variant="outlined" onClick={handleSignOut}>
-              Sign out
-            </Button>
-          </Stack>
-        </CardContent>
-      </Card>
-    </Box>
-  );
+  return <MemberDashboardPage token={token} user={user} onSignOut={handleSignOut} />;
 }
 
 export default App;
