@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { Box, CircularProgress } from "@mui/material";
+import { Box, Skeleton, Stack } from "@mui/material";
 import AuthPage from "./pages/AuthPage.jsx";
-import AvailabilityPage from "./pages/AvailabilityPage.jsx";
-import MemberDashboardPage from "./pages/MemberDashboardPage.jsx";
+import AppShell from "./components/AppShell.jsx";
 import { fetchCurrentUser } from "./api/auth.js";
 
 const TOKEN_KEY = "thoughtfull-tht.token";
@@ -38,8 +37,18 @@ function App() {
 
   if (checkingSession) {
     return (
-      <Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
-        <CircularProgress />
+      <Box sx={{ minHeight: "100vh", p: { xs: 2, sm: 3 } }} aria-busy="true" aria-live="polite">
+        <Stack spacing={3} sx={{ maxWidth: 1200, mx: "auto" }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Skeleton variant="circular" width={32} height={32} />
+              <Skeleton variant="text" width={140} />
+            </Stack>
+            <Skeleton variant="circular" width={40} height={40} />
+          </Stack>
+          <Skeleton variant="text" sx={{ fontSize: "1.5rem", width: 240 }} />
+          <Skeleton variant="rounded" height={320} />
+        </Stack>
       </Box>
     );
   }
@@ -48,11 +57,7 @@ function App() {
     return <AuthPage onAuthenticated={handleAuthenticated} />;
   }
 
-  if (user.role === "professional") {
-    return <AvailabilityPage token={token} user={user} onSignOut={handleSignOut} />;
-  }
-
-  return <MemberDashboardPage token={token} user={user} onSignOut={handleSignOut} />;
+  return <AppShell token={token} user={user} onSignOut={handleSignOut} />;
 }
 
 export default App;

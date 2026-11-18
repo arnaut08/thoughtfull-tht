@@ -8,16 +8,16 @@ import {
   Button,
   Card,
   CardContent,
-  CircularProgress,
+  Skeleton,
   Stack,
   Typography,
 } from "@mui/material";
 import { fetchAvailability, saveAvailability } from "../api/availability.js";
+import { DAY_NAMES } from "../lib/schedule.js";
 
 const MIN_WINDOW_MINUTES = 50;
 const MINUTE_MS = 60_000;
 const DAY_MS = 24 * 60 * MINUTE_MS;
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 // Sunday 2 Jan 2000 (UTC). The calendar renders in UTC, so windows show the exact stored
 // wall-clock times regardless of the browser's timezone or DST.
@@ -83,7 +83,7 @@ function sortRules(rules) {
   );
 }
 
-function AvailabilityPage({ token, user, onSignOut }) {
+function AvailabilityPage({ token, user, onBack }) {
   const calendarRef = useRef(null);
   const [savedRules, setSavedRules] = useState([]);
   const [events, setEvents] = useState([]);
@@ -162,7 +162,9 @@ function AvailabilityPage({ token, user, onSignOut }) {
     } catch (error) {
       const items = Object.entries(error.details).map(([key, text]) => {
         const rule = rules[Number(key.match(/\d+/)?.[0])];
-        return rule ? `${DAY_NAMES[rule.day_of_week]} ${rule.start_time}–${rule.end_time}: ${text}` : text;
+        return rule
+          ? `${DAY_NAMES[rule.day_of_week]} ${rule.start_time}–${rule.end_time}: ${text}`
+          : text;
       });
       setMessage({ severity: "error", text: error.message, items });
     } finally {
@@ -172,92 +174,104 @@ function AvailabilityPage({ token, user, onSignOut }) {
 
   if (loading) {
     return (
-      <Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
-        <CircularProgress />
-      </Box>
+      <Stack spacing={2} aria-busy="true" aria-live="polite">
+        <Skeleton variant="rounded" width={180} height={36} sx={{ alignSelf: "flex-start" }} />
+        <Box>
+          <Skeleton variant="text" sx={{ fontSize: "1.5rem", width: 200 }} />
+          <Skeleton variant="text" width={260} />
+        </Box>
+        <Card>
+          <CardContent>
+            <Skeleton variant="rounded" height={560} />
+          </CardContent>
+        </Card>
+      </Stack>
     );
   }
 
   if (loadError) {
-    return (
-      <Box sx={{ p: 2 }}>
-        <Alert severity="error">{loadError}</Alert>
-      </Box>
-    );
+    return <Alert severity="error">{loadError}</Alert>;
   }
 
   return (
-    <Box component="main" sx={{ minHeight: "100vh", p: 2, bgcolor: "#f5f5f5" }}>
-      <Stack spacing={2} sx={{ maxWidth: 1000, mx: "auto" }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Box>
-            <Typography variant="h5" component="h1">
-              Availability
-            </Typography>
-            <Typography color="text.secondary">
-              {user.name} · Times are in {timezone}
-            </Typography>
-          </Box>
-          <Button variant="outlined" onClick={onSignOut}>
-            Sign out
-          </Button>
-        </Stack>
+    <Stack spacing={2}>
+      <Button
+        onClick={onBack}
+        sx={{
+          alignSelf: "flex-start",
+          color: "#357a77",
+          fontSize: "0.875rem",
+          fontWeight: 600,
+          textDecoration: "none",
+          "&:hover": { color: "#2a6360", textDecoration: "none" },
+        }}
+      >
+        ← Back to dashboard
+      </Button>
 
-        <Alert severity="info">
-          Drag across a day to add a window, or click a window to remove it. Windows are at least{" "}
-          {MIN_WINDOW_MINUTES} minutes and can't run past midnight. Overlapping windows are merged
-          when you save.
+      <Box>
+        <Typography variant="h5" component="h1">
+          Availability
+        </Typography>
+        <Typography color="text.secondary">
+          {user.name} · Times are in {timezone}
+        </Typography>
+      </Box>
+
+      <Alert severity="info">
+        Drag across a day to add a window, or click a window to remove it. Windows are at least{" "}
+        {MIN_WINDOW_MINUTES} minutes and can't run past midnight. Overlapping windows are merged
+        when you save.
+      </Alert>
+
+      {message && (
+        <Alert severity={message.severity} onClose={() => setMessage(null)}>
+          {message.text}
+          {message.items?.map((item) => (
+            <Typography key={item} variant="body2">
+              {item}
+            </Typography>
+          ))}
         </Alert>
+      )}
 
-        {message && (
-          <Alert severity={message.severity} onClose={() => setMessage(null)}>
-            {message.text}
-            {message.items?.map((item) => (
-              <Typography key={item} variant="body2">
-                {item}
-              </Typography>
-            ))}
-          </Alert>
-        )}
+      <Card>
+        <CardContent>
+          <FullCalendar
+            ref={calendarRef}
+            plugins={[timeGridPlugin, interactionPlugin]}
+            initialView="timeGridWeek"
+            initialDate={REFERENCE_SUNDAY}
+            headerToolbar={false}
+            timeZone="UTC"
+            firstDay={0}
+            dayHeaderFormat={{ weekday: "long" }}
+            allDaySlot={false}
+            slotDuration="00:30:00"
+            slotMinTime="00:00:00"
+            slotMaxTime="24:00:00"
+            height="auto"
+            selectable
+            selectMirror
+            editable
+            events={events}
+            select={handleSelect}
+            eventClick={handleEventClick}
+            eventDrop={handleEventChange}
+            eventResize={handleEventChange}
+          />
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardContent>
-            <FullCalendar
-              ref={calendarRef}
-              plugins={[timeGridPlugin, interactionPlugin]}
-              initialView="timeGridWeek"
-              initialDate={REFERENCE_SUNDAY}
-              headerToolbar={false}
-              timeZone="UTC"
-              firstDay={0}
-              dayHeaderFormat={{ weekday: "long" }}
-              allDaySlot={false}
-              slotDuration="00:30:00"
-              slotMinTime="00:00:00"
-              slotMaxTime="24:00:00"
-              height="auto"
-              selectable
-              selectMirror
-              editable
-              events={events}
-              select={handleSelect}
-              eventClick={handleEventClick}
-              eventDrop={handleEventChange}
-              eventResize={handleEventChange}
-            />
-          </CardContent>
-        </Card>
-
-        <Stack direction="row" spacing={2} justifyContent="flex-end">
-          <Button onClick={handleDiscard} disabled={!isDirty || saving}>
-            Discard
-          </Button>
-          <Button variant="contained" onClick={handleSave} disabled={!isDirty || saving}>
-            {saving ? "Saving…" : "Save availability"}
-          </Button>
-        </Stack>
+      <Stack direction="row" spacing={2} justifyContent="flex-end">
+        <Button onClick={handleDiscard} disabled={!isDirty || saving}>
+          Discard
+        </Button>
+        <Button variant="contained" onClick={handleSave} disabled={!isDirty || saving}>
+          {saving ? "Saving…" : "Save availability"}
+        </Button>
       </Stack>
-    </Box>
+    </Stack>
   );
 }
 

@@ -14,7 +14,12 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import SpaIcon from "@mui/icons-material/Spa";
 import { login, register } from "../api/auth.js";
+
+const BRAND_700 = "#13595e";
+const BRAND_800 = "#0e474b";
+const BRAND_900 = "#0b3538";
 
 const ROLES = [
   { value: "member", label: "Member" },
@@ -80,14 +85,35 @@ export default function AuthPage({ onAuthenticated }) {
   return (
     <Box
       component="main"
-      sx={{ minHeight: "100vh", display: "grid", placeItems: "center", p: 2, bgcolor: "#f5f5f5" }}
+      sx={{ minHeight: "100vh", display: "grid", placeItems: "center", p: 2, bgcolor: "#fafaf9" }}
     >
-      <Card sx={{ width: "100%", maxWidth: 440 }}>
+      <Card
+        sx={{
+          width: "100%",
+          maxWidth: 440,
+          border: 0,
+          borderRadius: 4,
+          boxShadow: "0 1px 2px rgb(0 0 0 / 0.05)",
+        }}
+      >
         <CardContent sx={{ p: 4 }}>
-          <Typography variant="overline" color="primary" fontWeight={700}>
-            thoughtfull-tht
-          </Typography>
-          <Tabs value={mode} onChange={handleModeChange} variant="fullWidth" sx={{ mb: 3 }}>
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3, px: 0.5 }}>
+            <SpaIcon sx={{ color: BRAND_700 }} />
+            <Typography variant="h6" component="span" fontWeight={700} sx={{ color: BRAND_900 }}>
+              Thoughtfull-THT
+            </Typography>
+          </Stack>
+          <Tabs
+            value={mode}
+            onChange={handleModeChange}
+            variant="fullWidth"
+            sx={{
+              mb: 3,
+              "& .MuiTab-root": { textTransform: "none", fontWeight: 500, color: "#78716c" },
+              "& .MuiTab-root.Mui-selected": { color: BRAND_800, fontWeight: 600 },
+              "& .MuiTabs-indicator": { backgroundColor: BRAND_700 },
+            }}
+          >
             <Tab value="signin" label="Sign in" />
             <Tab value="signup" label="Sign up" />
           </Tabs>
@@ -98,7 +124,17 @@ export default function AuthPage({ onAuthenticated }) {
             </Alert>
           )}
 
-          <Box component="form" onSubmit={handleSubmit} noValidate>
+          <Box
+            component="form"
+            onSubmit={handleSubmit}
+            noValidate
+            sx={{
+              "& .MuiInputLabel-root.Mui-focused": { color: BRAND_700 },
+              "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                borderColor: BRAND_700,
+              },
+            }}
+          >
             <Stack spacing={2}>
               {isSignUp && (
                 <TextField
@@ -179,6 +215,13 @@ export default function AuthPage({ onAuthenticated }) {
                 variant="contained"
                 size="large"
                 disabled={submitting}
+                sx={{
+                  bgcolor: BRAND_700,
+                  boxShadow: "none",
+                  textTransform: "none",
+                  fontWeight: 600,
+                  "&:hover": { bgcolor: BRAND_800, boxShadow: "none" },
+                }}
                 startIcon={submitting ? <CircularProgress size={18} color="inherit" /> : null}
               >
                 {isSignUp ? "Create account" : "Sign in"}
