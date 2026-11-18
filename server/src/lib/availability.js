@@ -3,7 +3,7 @@ export const MIN_WINDOW_MINUTES = 50;
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 // end_time may be "24:00" so a window can run to the end of the day.
-function toMinutes(time, { allowEndOfDay = false } = {}) {
+export function toMinutes(time, { allowEndOfDay = false } = {}) {
   if (typeof time !== "string") return null;
   if (allowEndOfDay && time === "24:00") return 24 * 60;
   const match = TIME_PATTERN.exec(time);
