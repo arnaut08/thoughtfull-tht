@@ -20,6 +20,7 @@ const OPERATORS = {
   eq: (value, expected) => value === expected,
   lt: (value, expected) => value < expected,
   gt: (value, expected) => value > expected,
+  in: (value, expected) => expected.includes(value),
 };
 
 // In-memory stand-in for the Supabase calls used by the services.
@@ -112,6 +113,86 @@ beforeEach(() => {
   bookingRows.length = 0;
   rejectNextBooking = false;
   rejectNextBookingWith = "slot_unavailable";
+});
+
+describe("GET /api/bookings", () => {
+  test("splits a member's sessions into upcoming and past, in the member's timezone", async () => {
+    const { user: member, token } = addUser("member", "America/New_York");
+    const { user: professional } = addUser("professional", "Asia/Kolkata");
+    const now = DateTime.utc();
+    const sessionAt = (hoursFromNow) => ({
+      professional_id: professional.id,
+      member_id: member.id,
+      starts_at: now.plus({ hours: hoursFromNow }).startOf("hour").toISO(),
+      ends_at: now.plus({ hours: hoursFromNow + 1 }).startOf("hour").toISO(),
+    });
+    bookingRows.push(sessionAt(-48), sessionAt(-24), sessionAt(24), sessionAt(48));
+
+    const response = await request(app).get("/api/bookings").set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.timezone).toBe("America/New_York");
+    expect(response.body.upcoming.map((session) => session.start)).toEqual([
+      DateTime.fromISO(bookingRows[2].starts_at).setZone("America/New_York").toISO(),
+      DateTime.fromISO(bookingRows[3].starts_at).setZone("America/New_York").toISO(),
+    ]);
+    expect(response.body.past.map((session) => session.start)).toEqual([
+      DateTime.fromISO(bookingRows[1].starts_at).setZone("America/New_York").toISO(),
+      DateTime.fromISO(bookingRows[0].starts_at).setZone("America/New_York").toISO(),
+    ]);
+    expect(response.body.upcoming[0].professional).toEqual({
+      id: professional.id,
+      name: professional.name,
+      timezone: "Asia/Kolkata",
+    });
+  });
+
+  test("a session in progress is upcoming, and a session that has ended is past", async () => {
+    const { user: member, token } = addUser("member", "Europe/London");
+    const { user: professional } = addUser("professional", "Asia/Kolkata");
+    const now = DateTime.utc();
+    bookingRows.push({
+      professional_id: professional.id,
+      member_id: member.id,
+      starts_at: now.minus({ minutes: 10 }).toISO(),
+      ends_at: now.plus({ minutes: 40 }).toISO(),
+    });
+    bookingRows.push({
+      professional_id: professional.id,
+      member_id: member.id,
+      starts_at: now.minus({ hours: 2 }).toISO(),
+      ends_at: now.minus({ hours: 1 }).toISO(),
+    });
+
+    const response = await request(app).get("/api/bookings").set("Authorization", `Bearer ${token}`);
+
+    expect(response.body.upcoming).toHaveLength(1);
+    expect(response.body.past).toHaveLength(1);
+  });
+
+  test("only returns the caller's own sessions", async () => {
+    const { token } = addUser("member", "Europe/London");
+    const { user: otherMember } = addUser("member", "Europe/London");
+    const { user: professional } = addUser("professional", "Asia/Kolkata");
+    bookingRows.push({
+      professional_id: professional.id,
+      member_id: otherMember.id,
+      starts_at: DateTime.utc().plus({ days: 1 }).toISO(),
+      ends_at: DateTime.utc().plus({ days: 1, minutes: 50 }).toISO(),
+    });
+
+    const response = await request(app).get("/api/bookings").set("Authorization", `Bearer ${token}`);
+
+    expect(response.body).toEqual({ timezone: "Europe/London", upcoming: [], past: [] });
+  });
+
+  test("rejects professionals", async () => {
+    const { token } = addUser("professional", "Asia/Kolkata");
+
+    const response = await request(app).get("/api/bookings").set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(403);
+  });
 });
 
 describe("normalizeRules", () => {
