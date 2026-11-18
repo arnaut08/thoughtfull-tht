@@ -262,7 +262,7 @@ function AvailabilityPage({ token, user, onBack }) {
         </CardContent>
       </Card>
 
-      <Stack direction="row" spacing={2} justifyContent="flex-end">
+      <Stack direction="row" spacing={2} sx={{ justifyContent: "flex-end" }}>
         <Button onClick={handleDiscard} disabled={!isDirty || saving}>
           Discard
         </Button>

@@ -97,7 +97,7 @@ export default function AuthPage({ onAuthenticated }) {
         }}
       >
         <CardContent sx={{ p: 4 }}>
-          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3, px: 0.5 }}>
+          <Stack direction="row" spacing={1.5} sx={{ mb: 3, px: 0.5, alignItems: "center" }}>
             <SpaIcon sx={{ color: BRAND_700 }} />
             <Typography variant="h6" component="span" fontWeight={700} sx={{ color: BRAND_900 }}>
               Thoughtfull-THT
