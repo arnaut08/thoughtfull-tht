@@ -26,13 +26,23 @@ const OPERATORS = {
 // In-memory stand-in for the Supabase calls used by the services.
 function fakeQuery(table) {
   const filters = [];
+  let deleting = false;
   const matches = (row) => filters.every(([column, op, value]) => OPERATORS[op](row[column], value));
   const builder = {
     select: () => builder,
     order: () => builder,
+    delete: () => {
+      deleting = true;
+      return builder;
+    },
     maybeSingle: async () => ({ data: table.find(matches) ?? null, error: null }),
-    then: (resolve, reject) =>
-      Promise.resolve({ data: table.filter(matches), error: null }).then(resolve, reject),
+    then: (resolve, reject) => {
+      let rows = table.filter(matches);
+      if (deleting) {
+        rows.forEach((row) => table.splice(table.indexOf(row), 1));
+      }
+      return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
+    },
   };
   for (const op of Object.keys(OPERATORS)) {
     builder[op] = (column, value) => {
@@ -192,6 +202,88 @@ describe("GET /api/bookings", () => {
     const response = await request(app).get("/api/bookings").set("Authorization", `Bearer ${token}`);
 
     expect(response.status).toBe(403);
+  });
+});
+
+describe("DELETE /api/bookings/:id", () => {
+  const sessionAt = (member, professional, hoursFromNow) => {
+    const start = DateTime.utc().plus({ hours: hoursFromNow }).startOf("hour");
+    return {
+      id: randomUUID(),
+      professional_id: professional.id,
+      member_id: member.id,
+      starts_at: start.toISO(),
+      ends_at: start.plus({ minutes: 50 }).toISO(),
+    };
+  };
+
+  test("cancels a session more than 24 hours away and reports whether it is cancellable", async () => {
+    const { user: member, token } = addUser("member");
+    const { user: professional } = addUser("professional");
+    const later = sessionAt(member, professional, 48);
+    const soon = sessionAt(member, professional, 12);
+    bookingRows.push(soon, later);
+
+    const listed = await request(app).get("/api/bookings").set("Authorization", `Bearer ${token}`);
+    expect(listed.body.upcoming.map((session) => [session.id, session.cancellable])).toEqual([
+      [soon.id, false],
+      [later.id, true],
+    ]);
+
+    const response = await request(app)
+      .delete(`/api/bookings/${later.id}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(204);
+    expect(bookingRows.map((booking) => booking.id)).toEqual([soon.id]);
+  });
+
+  test("refuses to cancel a session that starts within 24 hours and keeps it booked", async () => {
+    const { user: member, token } = addUser("member");
+    const { user: professional } = addUser("professional");
+    const soon = sessionAt(member, professional, 23);
+    bookingRows.push(soon);
+
+    const response = await request(app)
+      .delete(`/api/bookings/${soon.id}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toMatch(/more than 24 hours/);
+    expect(bookingRows).toHaveLength(1);
+  });
+
+  test("returns 404 for another member's session or a malformed id, and deletes nothing", async () => {
+    const { user: member, token } = addUser("member");
+    const { user: otherMember } = addUser("member");
+    const { user: professional } = addUser("professional");
+    const theirs = sessionAt(otherMember, professional, 48);
+    bookingRows.push(theirs);
+
+    const otherSession = await request(app)
+      .delete(`/api/bookings/${theirs.id}`)
+      .set("Authorization", `Bearer ${token}`);
+    const malformed = await request(app)
+      .delete("/api/bookings/not-a-uuid")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(otherSession.status).toBe(404);
+    expect(malformed.status).toBe(404);
+    expect(bookingRows).toHaveLength(1);
+  });
+
+  test("rejects professionals", async () => {
+    const { user: member } = addUser("member");
+    const { user: professional, token } = addUser("professional");
+    const session = sessionAt(member, professional, 48);
+    bookingRows.push(session);
+
+    const response = await request(app)
+      .delete(`/api/bookings/${session.id}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(403);
+    expect(bookingRows).toHaveLength(1);
   });
 });
 
