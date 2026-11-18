@@ -160,6 +160,7 @@ function CalendarPanel({ events }) {
         <FullCalendar
           plugins={[timeGridPlugin, interactionPlugin]}
           initialView="timeGridWeek"
+          buttonText={{ today: "Today", week: "Week", day: "Day" }}
           headerToolbar={{
             left: "prev,next today",
             center: "title",
