@@ -7,7 +7,8 @@ import { SLOT_HORIZON_DAYS, generateOpenSlots } from "../lib/slots.js";
 import { getRulesForProfessional } from "../services/availability.js";
 import {
   bookSession,
-  getBookingsOverlapping,
+  getMemberBookingsOverlapping,
+  getProfessionalBookingsOverlapping,
   listProfessionals,
 } from "../services/professionals.js";
 import { findUserById } from "../services/users.js";
@@ -25,11 +26,13 @@ async function findProfessional(id) {
 }
 
 // Open sessions over the next SLOT_HORIZON_DAYS, as DateTimes in the professional's zone.
-async function loadOpenSlots(professional, now) {
+// Sessions that overlap the member's bookings with any professional are excluded too.
+async function loadOpenSlots(professional, member, now) {
   const horizonEnd = now.plus({ days: SLOT_HORIZON_DAYS });
-  const [rows, bookings] = await Promise.all([
+  const [rows, professionalBookings, memberBookings] = await Promise.all([
     getRulesForProfessional(professional.id),
-    getBookingsOverlapping(professional.id, now, horizonEnd),
+    getProfessionalBookingsOverlapping(professional.id, now, horizonEnd),
+    getMemberBookingsOverlapping(member.id, now, horizonEnd),
   ]);
 
   return generateOpenSlots({
@@ -37,7 +40,7 @@ async function loadOpenSlots(professional, now) {
     timezone: professional.timezone,
     now,
     horizonEnd,
-    booked: bookings.map((booking) => ({
+    booked: [...professionalBookings, ...memberBookings].map((booking) => ({
       start: DateTime.fromISO(booking.starts_at),
       end: DateTime.fromISO(booking.ends_at),
     })),
@@ -64,7 +67,7 @@ professionalsRouter.get("/:id", async (request, response) => {
     return response.status(404).json({ error: "Professional not found" });
   }
 
-  const slots = await loadOpenSlots(professional, DateTime.utc());
+  const slots = await loadOpenSlots(professional, member, DateTime.utc());
 
   response.json({
     professional: toProfessionalSummary(professional),
@@ -96,7 +99,7 @@ professionalsRouter.post("/:id/bookings", requireMember, async (request, respons
     return response.status(404).json({ error: "Professional not found" });
   }
 
-  const slots = await loadOpenSlots(professional, DateTime.utc());
+  const slots = await loadOpenSlots(professional, member, DateTime.utc());
   const slot = slots.find((candidate) => candidate.start.toMillis() === startsAt.toMillis());
   if (!slot) {
     return response.status(409).json({ error: "That session is no longer available" });
@@ -110,6 +113,9 @@ professionalsRouter.post("/:id/bookings", requireMember, async (request, respons
       endsAt: slot.end.toUTC().toISO(),
     });
   } catch (error) {
+    if (error.message === "member_conflict") {
+      return response.status(409).json({ error: "You already have a session booked at this time" });
+    }
     if (error.message === "slot_unavailable") {
       return response.status(409).json({ error: "That session is no longer available" });
     }
