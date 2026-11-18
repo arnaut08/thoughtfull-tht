@@ -11,6 +11,9 @@ function describeNotification(notification, timezone) {
     const newWhen = `${formatSessionDate(notification.newStart, timezone)} at ${formatSessionTime(notification.newStart, timezone)}`;
     return `${notification.actor.name} rescheduled the session from ${when} to ${newWhen}.`;
   }
+  if (notification.type === "session_reminder") {
+    return `Reminder: your session with ${notification.actor.name} is on ${when}.`;
+  }
   return `${notification.actor.name} cancelled the session scheduled for ${when}.`;
 }
 

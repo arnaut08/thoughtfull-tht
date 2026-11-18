@@ -49,8 +49,22 @@
   a refused cancellation writes nothing.
 - The recipient is the other party. A member's action notifies the professional, and a professional's
   action notifies the member.
-- Types are `session_cancelled` and `session_rescheduled`. A check constraint ties `new_starts_at` to the
-  reschedule type. Planned 24-hour and 1-hour reminders will add new types here and are not implemented yet.
+- Types are `session_cancelled`, `session_rescheduled`, and `session_reminder`. A check constraint ties `new_starts_at` to the
+  reschedule type. Reminders have no `new_starts_at`, so they pass that constraint.
+
+## Session reminders
+- A reminder is scheduled 24 hours and 1 hour before the session starts, for both the member and the
+  professional. Each reminder is a `session_reminders` row (migration `0009_session_reminders.sql`).
+- `book_session` and `reschedule_session` call `sync_session_reminders`, in the same transaction as the
+  booking change. It deletes the session's undelivered reminders and writes new ones for the current start.
+  A reminder whose time has already passed is not created.
+- Cancelling deletes the booking, and the reminders cascade with it. Nothing else needs to change.
+- Delivery: `deliver_due_reminders` runs every 30 seconds from `startReminderWorker` (`server/src/services/reminders.js`).
+  It locks due rows with `SKIP LOCKED`, inserts the notification, and sets `delivered_at` in one statement. The
+  row and its notification commit together, so a reminder is delivered exactly once, including across restarts
+  and multiple server instances. Reminders that came due while the server was down are delivered when it comes back.
+- Delivered reminders stay in the table. A reschedule creates reminders for the new start, and the unique key
+  includes the start, so a reminder delivered for the old time doesn't block the new one.
 - `GET /api/notifications` returns the 50 newest items plus an exact unread count.
   `POST /api/notifications/read` marks everything read. The client polls the unread count every 30 seconds
   and marks items read when the tray opens. Polling was chosen over websockets for simplicity.
