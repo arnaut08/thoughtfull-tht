@@ -16,7 +16,7 @@ export default function AppShell({ token, user, onSignOut }) {
   function renderPage() {
     switch (view.page) {
       case "profile":
-        return <ProfilePage user={user} />;
+        return <ProfilePage token={token} user={user} />;
       case "availability":
         return <AvailabilityPage token={token} user={user} onBack={goHome} />;
       case "professional":
