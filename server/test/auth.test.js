@@ -132,6 +132,18 @@ describe("POST /api/auth/login", () => {
   });
 });
 
+describe("CORS", () => {
+  test("allows the client origin to call the API from the browser", async () => {
+    const response = await request(app)
+      .options("/api/auth/login")
+      .set("Origin", "http://localhost:5173")
+      .set("Access-Control-Request-Method", "POST")
+      .set("Access-Control-Request-Headers", "content-type");
+
+    expect(response.headers["access-control-allow-origin"]).toBe("http://localhost:5173");
+  });
+});
+
 describe("GET /api/auth/me (requireAuth)", () => {
   test("returns the current user for a valid bearer token", async () => {
     const registered = await register();
