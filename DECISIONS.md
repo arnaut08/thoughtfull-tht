@@ -35,6 +35,12 @@
   session atomically through `reschedule_session` (migration `0006_reschedule_session.sql`), which
   must be run in Supabase. The new slot follows the normal booking rules, and the session's own time
   is offered as open while rescheduling.
+- Professionals have no notice limit. They can cancel any booked session
+  (`DELETE /api/professional-bookings/:id`) and reschedule one
+  (`POST /api/professional-bookings/:id/reschedule`) at any time. A professional's reschedule
+  goes through the same `reschedule_session` RPC with `p_by_professional = true`, which skips only the
+  24-hour check (migration `0007_professional_reschedule.sql`, which must be run after 0006). The member's
+  session is moved in one step, never cancelled first, so the member is never left without a session.
 
 ## Slot generation
 - Slots are built from the professional's local-time windows in the professional's
