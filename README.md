@@ -32,6 +32,20 @@ The React app is served at <http://localhost:5173> and the Express API at
 
 The server exposes `GET /api/health`, which returns `{ "status": "ok" }`.
 
+### Docker
+
+Put the server variables in the root `.env`, then run:
+
+```sh
+docker compose up --build
+```
+
+The app is served at <http://localhost> (nginx on port 80), and nginx proxies
+`/api` to the `server` container on port 3000. The client image bakes in
+`VITE_API_URL=/api` at build time, so the root `.env` value for `VITE_API_URL`
+is not used by the containers. `.env` files are excluded from the image build
+contexts by `.dockerignore`.
+
 ### Supabase
 
 The server uses `@supabase/supabase-js` through `server/src/db.js`. Set these in
