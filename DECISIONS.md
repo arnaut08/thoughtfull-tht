@@ -42,6 +42,19 @@
   24-hour check (migration `0007_professional_reschedule.sql`, which must be run after 0006). The member's
   session is moved in one step, never cancelled first, so the member is never left without a session.
 
+## In-app notifications
+- Cancelling and rescheduling write a `notifications` row in the same transaction as the change.
+  `cancel_session` (migration `0008_session_notifications.sql`) replaces the plain deletes, and
+  `reschedule_session` also inserts a row. A change can't happen without its notification, and
+  a refused cancellation writes nothing.
+- The recipient is the other party. A member's action notifies the professional, and a professional's
+  action notifies the member.
+- Types are `session_cancelled` and `session_rescheduled`. A check constraint ties `new_starts_at` to the
+  reschedule type. Planned 24-hour and 1-hour reminders will add new types here and are not implemented yet.
+- `GET /api/notifications` returns the 50 newest items plus an exact unread count.
+  `POST /api/notifications/read` marks everything read. The client polls the unread count every 30 seconds
+  and marks items read when the tray opens. Polling was chosen over websockets for simplicity.
+
 ## Slot generation
 - Slots are built from the professional's local-time windows in the professional's
   timezone, then returned as instants in the member's timezone. Luxon handles

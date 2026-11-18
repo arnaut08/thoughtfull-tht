@@ -47,6 +47,20 @@ export async function bookSession({ professionalId, memberId, startsAt, endsAt }
   return data;
 }
 
+// Cancels a booking and notifies the other party, via the cancel_session SQL function. Throws with message
+// "booking_not_found", or "cancellation_closed" when a member cancels inside the notice window.
+export async function cancelSession({ bookingId, professionalId, memberId, byProfessional, noticeCutoff }) {
+  const { error } = await supabase.rpc("cancel_session", {
+    p_booking_id: bookingId,
+    p_professional_id: professionalId,
+    p_member_id: memberId,
+    p_by_professional: byProfessional,
+    p_notice_cutoff: noticeCutoff,
+  });
+
+  if (error) throw error;
+}
+
 // Moves an existing booking to a new slot via the reschedule_session SQL function. Throws with the same
 // messages as bookSession, plus "booking_not_found" and "cancellation_closed" (members only).
 export async function rescheduleSession({ bookingId, professionalId, memberId, startsAt, endsAt, byProfessional = false }) {

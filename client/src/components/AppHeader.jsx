@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   AppBar,
+  Badge,
   Box,
   ButtonBase,
   Divider,
@@ -16,12 +17,32 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import PersonIcon from "@mui/icons-material/Person";
 import SpaIcon from "@mui/icons-material/Spa";
+import { fetchNotifications } from "../api/notifications.js";
 import NameAvatar from "./NameAvatar.jsx";
 import NotificationsTray from "./NotificationsTray.jsx";
 
-export default function AppHeader({ user, onHome, onProfile, onSignOut }) {
+const UNREAD_POLL_MS = 30000;
+
+export default function AppHeader({ token, user, onHome, onProfile, onSignOut }) {
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [trayOpen, setTrayOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    const poll = () =>
+      fetchNotifications(token)
+        .then((data) => active && setUnreadCount(data.unreadCount))
+        .catch(() => {});
+    poll();
+    const timer = setInterval(poll, UNREAD_POLL_MS);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [token]);
+
+  const markAllRead = useCallback(() => setUnreadCount(0), []);
 
   function closeMenuThen(action) {
     setMenuAnchor(null);
@@ -57,7 +78,9 @@ export default function AppHeader({ user, onHome, onProfile, onSignOut }) {
               color={trayOpen ? "primary" : "default"}
               onClick={() => setTrayOpen((open) => !open)}
             >
-              <NotificationsNoneIcon />
+              <Badge badgeContent={unreadCount} color="error" max={99}>
+                <NotificationsNoneIcon />
+              </Badge>
             </IconButton>
           </Tooltip>
 
@@ -77,7 +100,13 @@ export default function AppHeader({ user, onHome, onProfile, onSignOut }) {
         </Toolbar>
       </AppBar>
 
-      <NotificationsTray open={trayOpen} onClose={() => setTrayOpen(false)} />
+      <NotificationsTray
+        open={trayOpen}
+        token={token}
+        timezone={user.timezone}
+        onClose={() => setTrayOpen(false)}
+        onMarkedRead={markAllRead}
+      />
 
       <Menu
         anchorEl={menuAnchor}

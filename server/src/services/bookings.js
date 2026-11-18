@@ -37,32 +37,3 @@ export async function getBookingForProfessional(bookingId, professionalId) {
   if (error) throw error;
   return data;
 }
-
-// Deletes the professional's booking with no notice cutoff. Returns true if a row was deleted.
-export async function deleteBookingForProfessional(bookingId, professionalId) {
-  const { data, error } = await supabase
-    .from("bookings")
-    .delete()
-    .eq("id", bookingId)
-    .eq("professional_id", professionalId)
-    .select("id");
-
-  if (error) throw error;
-  return data.length > 0;
-}
-
-// Deletes the member's booking only if it starts after startsAfter. Returns true if a row was deleted.
-// The start-time condition is checked in the same statement, so a session can't be cancelled
-// once it is inside the cutoff, even if the check in getBookingForMember was stale.
-export async function deleteBookingForMember(bookingId, memberId, startsAfter) {
-  const { data, error } = await supabase
-    .from("bookings")
-    .delete()
-    .eq("id", bookingId)
-    .eq("member_id", memberId)
-    .gt("starts_at", startsAfter.toISO())
-    .select("id");
-
-  if (error) throw error;
-  return data.length > 0;
-}

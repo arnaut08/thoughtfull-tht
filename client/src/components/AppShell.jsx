@@ -73,6 +73,7 @@ export default function AppShell({ token, user, onSignOut }) {
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
       <AppHeader
+        token={token}
         user={user}
         onHome={goHome}
         onProfile={() => setView({ page: "profile" })}
