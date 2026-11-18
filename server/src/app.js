@@ -3,6 +3,7 @@ import cors from "cors";
 import { authRouter } from "./routes/auth.js";
 import { availabilityRouter } from "./routes/availability.js";
 import { bookingsRouter, professionalBookingsRouter } from "./routes/bookings.js";
+import { notificationsRouter } from "./routes/notifications.js";
 import { professionalsRouter } from "./routes/professionals.js";
 
 export function createApp() {
@@ -20,6 +21,7 @@ export function createApp() {
   app.use("/api/bookings", bookingsRouter);
   app.use("/api/professional-bookings", professionalBookingsRouter);
   app.use("/api/professionals", professionalsRouter);
+  app.use("/api/notifications", notificationsRouter);
 
   return app;
 }

@@ -8,13 +8,11 @@ import { isBeyondNotice, noticeClosedMessage, noticeCutoff } from "../lib/cancel
 import { SLOT_HORIZON_DAYS, generateOpenSlots } from "../lib/slots.js";
 import { getRulesForProfessional } from "../services/availability.js";
 import {
-  deleteBookingForMember,
-  deleteBookingForProfessional,
   getBookingForMember,
   getBookingForProfessional,
   getBookingsForMember,
 } from "../services/bookings.js";
-import { getProfessionalBookingsOverlapping, rescheduleSession } from "../services/professionals.js";
+import { getProfessionalBookingsOverlapping, cancelSession, rescheduleSession } from "../services/professionals.js";
 import { findUserById, findUsersByIds } from "../services/users.js";
 import { loadOpenSlots } from "./professionals.js";
 
@@ -78,14 +76,22 @@ bookingsRouter.delete("/:id", async (request, response) => {
     return response.status(404).json({ error: "Session not found" });
   }
 
-  const cancellationCutoff = noticeCutoff(DateTime.utc());
-  if (DateTime.fromISO(booking.starts_at) <= cancellationCutoff) {
-    return response.status(409).json({ error: noticeClosedMessage("cancelled") });
-  }
-
-  const deleted = await deleteBookingForMember(bookingId, request.user.id, cancellationCutoff);
-  if (!deleted) {
-    return response.status(409).json({ error: noticeClosedMessage("cancelled") });
+  try {
+    await cancelSession({
+      bookingId: booking.id,
+      professionalId: booking.professional_id,
+      memberId: request.user.id,
+      byProfessional: false,
+      noticeCutoff: noticeCutoff(DateTime.utc()).toISO(),
+    });
+  } catch (error) {
+    if (error.message === "booking_not_found") {
+      return response.status(404).json({ error: "Session not found" });
+    }
+    if (error.message === "cancellation_closed") {
+      return response.status(409).json({ error: noticeClosedMessage("cancelled") });
+    }
+    throw error;
   }
 
   response.status(204).end();
@@ -150,9 +156,24 @@ professionalBookingsRouter.delete("/:id", async (request, response) => {
     return response.status(404).json({ error: "Session not found" });
   }
 
-  const deleted = await deleteBookingForProfessional(bookingId, request.user.id);
-  if (!deleted) {
+  const booking = await getBookingForProfessional(bookingId, request.user.id);
+  if (!booking) {
     return response.status(404).json({ error: "Session not found" });
+  }
+
+  try {
+    await cancelSession({
+      bookingId: booking.id,
+      professionalId: request.user.id,
+      memberId: booking.member_id,
+      byProfessional: true,
+      noticeCutoff: null,
+    });
+  } catch (error) {
+    if (error.message === "booking_not_found") {
+      return response.status(404).json({ error: "Session not found" });
+    }
+    throw error;
   }
 
   response.status(204).end();
