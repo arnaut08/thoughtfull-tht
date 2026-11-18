@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Box, Button, Card, CardContent, CircularProgress, Stack, Typography } from "@mui/material";
 import AuthPage from "./pages/AuthPage.jsx";
+import AvailabilityPage from "./pages/AvailabilityPage.jsx";
 import { fetchCurrentUser } from "./api/auth.js";
 
 const TOKEN_KEY = "thoughtfull-tht.token";
@@ -44,6 +45,10 @@ function App() {
 
   if (!token || !user) {
     return <AuthPage onAuthenticated={handleAuthenticated} />;
+  }
+
+  if (user.role === "professional") {
+    return <AvailabilityPage token={token} user={user} onSignOut={handleSignOut} />;
   }
 
   return (
