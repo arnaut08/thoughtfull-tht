@@ -115,17 +115,16 @@ export default function ProfessionalProfilePage({ token, professionalId, memberT
   return (
     <Stack spacing={2}>
       <Button
+        variant="outlined"
         onClick={onBack}
         sx={{
           alignSelf: "flex-start",
-          color: "#357a77",
-          fontSize: "0.875rem",
-          fontWeight: 600,
-          textDecoration: "none",
-          "&:hover": { color: "#2a6360", textDecoration: "none" },
+          color: "#13595e",
+          borderColor: "#13595e",
+          "&:hover": { borderColor: "#0e474b", bgcolor: "#eff7f6" },
         }}
       >
-        ← Back to professionals
+        Back to professionals
       </Button>
 
       {!profile && !loadError && (

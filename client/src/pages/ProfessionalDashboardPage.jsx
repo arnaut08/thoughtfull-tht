@@ -51,7 +51,15 @@ function AvailabilitySummary({ timezone, rules, onEdit }) {
               Times are in {timezone}
             </Typography>
           </Box>
-          <Button variant="outlined" onClick={onEdit}>
+          <Button
+            variant="outlined"
+            onClick={onEdit}
+            sx={{
+              color: "#13595e",
+              borderColor: "#13595e",
+              "&:hover": { borderColor: "#0e474b", bgcolor: "#eff7f6" },
+            }}
+          >
             Edit availability
           </Button>
         </Stack>
