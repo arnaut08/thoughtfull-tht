@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
+import CalendarShell from "../components/CalendarShell.jsx";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import { Alert, Box, Button, Card, CardContent, Skeleton, Stack, Typography } from "@mui/material";
@@ -135,6 +136,7 @@ function BlockedDatesPage({ token, user, onBack }) {
 
       <Card>
         <CardContent>
+          <CalendarShell>
           <FullCalendar
             className="session-calendar"
             plugins={[dayGridPlugin, interactionPlugin]}
@@ -147,6 +149,7 @@ function BlockedDatesPage({ token, user, onBack }) {
             dateClick={handleDayClick}
             eventClick={({ event }) => handleDayClick({ dateStr: event.startStr })}
           />
+          </CalendarShell>
         </CardContent>
       </Card>
     </Stack>

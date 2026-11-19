@@ -1,5 +1,6 @@
 import { useState } from "react";
 import FullCalendar from "@fullcalendar/react";
+import CalendarShell from "./CalendarShell.jsx";
 import interactionPlugin from "@fullcalendar/interaction";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
@@ -157,6 +158,7 @@ function CalendarPanel({ events }) {
   return (
     <section className="rounded-2xl bg-white p-6 shadow-sm md:p-8">
       <div className="session-calendar">
+        <CalendarShell>
         <FullCalendar
           plugins={[timeGridPlugin, interactionPlugin]}
           initialView="timeGridWeek"
@@ -174,6 +176,7 @@ function CalendarPanel({ events }) {
           height="auto"
           events={events}
         />
+        </CalendarShell>
       </div>
     </section>
   );

@@ -101,13 +101,6 @@ h1 {
   box-shadow: 0 0 0 2px #fde68a;
 }
 
-.fc .fc-event.slot-selected {
-  background-color: #0f766e !important;
-  border: 2px solid #134e4a !important;
-  color: #ffffff !important;
-  font-weight: 700;
-  box-shadow: 0 0 0 3px #99f6e4;
-}
 
 /* Toolbar buttons: flat, rounded, pastel. Scoped under .fc-toolbar to outrank FullCalendar's defaults. */
 .session-calendar .fc-toolbar .fc-button {

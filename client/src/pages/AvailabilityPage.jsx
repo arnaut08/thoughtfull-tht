@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
+import CalendarShell from "../components/CalendarShell.jsx";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import {
@@ -8,6 +9,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   InputAdornment,
   Skeleton,
   Stack,
@@ -85,6 +87,13 @@ function sortRules(rules) {
     (a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time),
   );
 }
+
+function renderWindow({ event }) {
+  const { startMin, endMin } = toWindow(event.start, event.end);
+  return <span className="fc-event-title">{`${toHHmm(startMin)}–${toHHmm(endMin)}`}</span>;
+}
+
+const windowClassNames = () => ["tf-availability"];
 
 function AvailabilityPage({ token, user, onBack }) {
   const calendarRef = useRef(null);
@@ -230,9 +239,9 @@ function AvailabilityPage({ token, user, onBack }) {
         onClick={onBack}
         sx={{
           alignSelf: "flex-start",
-          color: "#13595e",
-          borderColor: "#13595e",
-          "&:hover": { borderColor: "#0e474b", bgcolor: "#eff7f6" },
+          color: "primary.main",
+          borderColor: "primary.main",
+          "&:hover": { borderColor: "primary.dark", bgcolor: "action.hover" },
         }}
       >
         Back to dashboard
@@ -242,16 +251,7 @@ function AvailabilityPage({ token, user, onBack }) {
         <Typography variant="h5" component="h1">
           Availability
         </Typography>
-        <Typography color="text.secondary">
-          {user.name} · Times are in {timezone}
-        </Typography>
       </Box>
-
-      <Alert severity="info">
-        Drag across a day to add a window, or click a window to remove it. Windows are at least{" "}
-        {MIN_WINDOW_MINUTES} minutes and can't run past midnight. Overlapping windows are merged
-        when you save.
-      </Alert>
 
       {message && (
         <Alert severity={message.severity} onClose={() => setMessage(null)}>
@@ -310,8 +310,15 @@ function AvailabilityPage({ token, user, onBack }) {
         </CardContent>
       </Card>
 
+      <Alert severity="info">
+        Weekly hours in {timezone}, repeating every week. Existing booked sessions are not affected.
+        Drag across a day to add a window, and click a window to remove it. Windows must be at least{" "}
+        {MIN_WINDOW_MINUTES} minutes, can't cross midnight, and overlaps merge on save.
+      </Alert>
+
       <Card>
         <CardContent>
+          <CalendarShell>
           <FullCalendar
             ref={calendarRef}
             plugins={[timeGridPlugin, interactionPlugin]}
@@ -330,22 +337,40 @@ function AvailabilityPage({ token, user, onBack }) {
             selectMirror
             editable
             events={events}
+            eventClassNames={windowClassNames}
+            eventContent={renderWindow}
             select={handleSelect}
             eventClick={handleEventClick}
             eventDrop={handleEventChange}
             eventResize={handleEventChange}
           />
+          </CalendarShell>
         </CardContent>
       </Card>
 
-      <Stack direction="row" spacing={2} sx={{ justifyContent: "flex-end" }}>
+      <Box
+        sx={{
+          position: "sticky",
+          bottom: 0,
+          zIndex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          gap: 2,
+          py: 1.5,
+          bgcolor: "background.paper",
+          borderTop: 1,
+          borderColor: "divider",
+        }}
+      >
+        {isDirty && <Chip size="small" color="warning" variant="outlined" label="Unsaved changes" />}
         <Button onClick={handleDiscard} disabled={!isDirty || saving}>
-          Discard
+          Reset
         </Button>
         <Button variant="contained" onClick={handleSave} disabled={!isDirty || saving}>
           {saving ? "Saving…" : "Save availability"}
         </Button>
-      </Stack>
+      </Box>
     </Stack>
   );
 }

@@ -1,0 +1,56 @@
+/* Wrap every <FullCalendar> in <div className="tf-calendar"> */
+.tf-calendar .fc {
+  --fc-border-color: var(--color-border);
+  --fc-page-bg-color: var(--color-bg);
+  --fc-neutral-bg-color: var(--color-surface);
+  --fc-today-bg-color: var(--color-surface);
+  --fc-button-bg-color: var(--color-primary);
+  --fc-button-border-color: var(--color-primary);
+  --fc-button-hover-bg-color: var(--color-primary-hover);
+  --fc-button-hover-border-color: var(--color-primary-hover);
+  --fc-button-active-bg-color: var(--color-primary-hover);
+  --fc-button-active-border-color: var(--color-primary-hover);
+  --fc-event-bg-color: var(--color-primary);
+  --fc-event-border-color: var(--color-primary);
+  --fc-event-text-color: var(--color-on-primary);
+  --fc-now-indicator-color: var(--color-primary);
+  --fc-list-event-hover-bg-color: var(--color-surface);
+  --fc-highlight-color: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  font-family: var(--font-body);
+}
+.tf-calendar .fc .fc-toolbar-title { font-family: var(--font-heading); font-size: var(--text-xl); }
+.tf-calendar .fc .fc-button {
+  border-radius: var(--radius-button);
+  text-transform: none;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  padding: 0.45em 1.1em;
+}
+.tf-calendar .fc .fc-button:focus-visible { box-shadow: var(--focus-ring); outline: none; }
+.tf-calendar .fc .fc-button:disabled { opacity: 0.5; }
+.tf-calendar .fc .fc-col-header-cell-cushion {
+  font-family: var(--font-heading);
+  color: var(--color-text);
+  text-decoration: none;
+}
+.tf-calendar .fc .fc-scrollgrid { border-radius: var(--radius-card); overflow: hidden; }
+
+/* Member slot pills */
+.tf-calendar .tf-slot {
+  background: var(--color-bg);
+  border: 1.5px solid var(--color-primary);
+  color: var(--color-primary);
+  border-radius: var(--radius-button);
+  padding: 2px 8px;
+  margin-block: 2px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.tf-calendar .tf-slot:hover { background: var(--color-surface); }
+.tf-calendar .tf-slot:focus-visible { box-shadow: var(--focus-ring); outline: none; }
+.tf-calendar .tf-slot.is-selected { background: var(--color-primary); color: var(--color-on-primary); }
+
+/* Professional views */
+.tf-calendar .tf-booked { background: var(--color-primary); color: var(--color-on-primary); border-radius: 6px; }
+.tf-calendar .tf-open-slot { background: color-mix(in srgb, var(--color-accent) 22%, white); }
+.tf-calendar .tf-availability { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
