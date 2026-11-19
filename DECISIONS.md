@@ -78,6 +78,21 @@
 - Slots cover the next 4 weeks (28 days, `SLOT_HORIZON_DAYS`) from the request time and exclude sessions that
   have already started.
 
+## Blocked dates
+- A professional can block whole calendar dates (`blocked_dates`, migration `0010_create_blocked_dates.sql`).
+  The date is local to the professional's timezone, like the weekly rules.
+- A blocked date has no open slots. `generateOpenSlots` skips the whole day, both for members and in the
+  professional's own session list.
+- `POST /api/availability/blocked-dates` (idempotent) and `DELETE /api/availability/blocked-dates/:date` change
+  blocks immediately. They are not part of the weekly-rules save.
+- Rescheduling is suggested per session: `GET /api/availability/reschedule-suggestions?date=` proposes the same local
+  time on the nearest later day with an open slot (falling back to the earliest free slot). It skips the blocked day,
+  the member's other sessions, and slots already suggested for another session. The dialog shows each suggestion
+  and lets the professional change it by picking a day, then a time. Confirming moves each session through
+  `POST /api/professional-bookings/:id/reschedule` (which notifies the member), then blocks the date. Calls are
+  sequential, so a failure partway leaves earlier moves in place and the dialog lists the sessions still to move.
+- Blocked dates are managed on their own page, opened from the professional's profile, with a month calendar where clicking a day toggles its block. Weekly hours stay on the availability page.
+
 ## Timezone changes
 - Changing `users.timezone` keeps the local hours. Monday 09:00 stays 09:00 in the
   new zone.
