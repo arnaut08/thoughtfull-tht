@@ -77,6 +77,9 @@
   clocks change. A local time that falls in a DST gap moves forward.
 - Slots cover the next 4 weeks (28 days, `SLOT_HORIZON_DAYS`) from the request time and exclude sessions that
   have already started.
+- The member's booking calendar uses FullCalendar's week day grid (`dayGridWeek`), so the seven days sit side by side. It shows one chip per session, which avoids the list view's full-width rows and its duplicate handling of overnight sessions.
+- Each chip shows only its time range (`displayEventTime: false`, range in the title). Members only see open slots, so there is no "Open" label. A session that crosses midnight in the member's zone is capped at that midnight, so it appears once, on its start day, and its end time is shown without a date.
+- The chip the member picks is highlighted (`slot-selected`) until they confirm or cancel. Confirmation runs in a dialog rather than a panel at the bottom of the page, and success or error messages appear above the calendar.
 
 ## Blocked dates
 - A professional can block whole calendar dates (`blocked_dates`, migration `0010_create_blocked_dates.sql`).
