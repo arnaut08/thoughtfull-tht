@@ -81,8 +81,69 @@ function toWallClock(iso) {
   return iso.slice(0, 19);
 }
 
-function toCalendarEvents(slots) {
-  return slots.map((slot) => {
+// Parses "HH:mm" (or "24:00") into minutes after midnight.
+function toMinutes(time) {
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function toWallClockFromMinutes(date, minutes) {
+  if (minutes < 24 * 60) {
+    const hh = String(Math.floor(minutes / 60)).padStart(2, "0");
+    const mm = String(minutes % 60).padStart(2, "0");
+    return `${date}T${hh}:${mm}:00`;
+  }
+  const nextDay = new Date(`${date}T00:00:00Z`);
+  nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+  return `${nextDay.toISOString().slice(0, 10)}T00:00:00`;
+}
+
+// Blocked dates are shown over the professional's availability hours, but only in the gaps
+// between kept sessions, so the chip never sits on top of a session.
+function toBlockedEvents(blockedDates, rules, slots) {
+  const booked = slots.filter((slot) => slot.member !== null);
+  return blockedDates.flatMap((date) => {
+    const weekday = new Date(`${date}T00:00:00`).getDay();
+    const dayBooked = booked
+      .filter((slot) => slot.start.slice(0, 10) <= date && slot.end.slice(0, 10) >= date)
+      .map((slot) => {
+        const startsToday = slot.start.slice(0, 10) === date;
+        const endsToday = slot.end.slice(0, 10) === date;
+        const start = startsToday ? toMinutes(slot.start.slice(11, 16)) : 0;
+        const end = endsToday ? toMinutes(slot.end.slice(11, 16)) : 24 * 60;
+        return { start, end };
+      })
+      .filter((interval) => interval.end > interval.start)
+      .sort((a, b) => a.start - b.start);
+
+    return rules
+      .filter((rule) => rule.day_of_week === weekday)
+      .flatMap((rule) => {
+        const windowStart = toMinutes(rule.start_time);
+        const windowEnd = toMinutes(rule.end_time);
+        const gaps = [];
+        let cursor = windowStart;
+        for (const interval of dayBooked) {
+          if (interval.end <= cursor || interval.start >= windowEnd) continue;
+          if (interval.start > cursor) gaps.push([cursor, Math.min(interval.start, windowEnd)]);
+          cursor = Math.max(cursor, interval.end);
+        }
+        if (cursor < windowEnd) gaps.push([cursor, windowEnd]);
+
+        return gaps.map(([start, end]) => ({
+          id: `blocked-${date}-${start}`,
+          title: "Blocked",
+          start: toWallClockFromMinutes(date, start),
+          end: toWallClockFromMinutes(date, end),
+          displayEventTime: false,
+          classNames: ["session-blocked"],
+        }));
+      });
+  });
+}
+
+function toCalendarEvents(slots, blockedDates, rules) {
+  const slotEvents = slots.map((slot) => {
     const open = slot.member === null;
     return {
       id: slot.start,
@@ -92,9 +153,10 @@ function toCalendarEvents(slots) {
       classNames: [open ? "session-open" : "session-booked"],
     };
   });
+  return [...slotEvents, ...toBlockedEvents(blockedDates, rules, slots)];
 }
 
-function UpcomingSessionsCard({ bookings, loadError, onEventClick, panel }) {
+function UpcomingSessionsCard({ bookings, blockedDates, rules, loadError, onEventClick, panel }) {
   let body;
   if (loadError) {
     body = <Alert severity="error">{loadError}</Alert>;
@@ -117,7 +179,7 @@ function UpcomingSessionsCard({ bookings, loadError, onEventClick, panel }) {
           nowIndicator
           height="auto"
           eventTimeFormat={{ hour: "numeric", minute: "2-digit", meridiem: "short" }}
-          events={toCalendarEvents(bookings.slots)}
+          events={toCalendarEvents(bookings.slots, blockedDates, rules)}
           eventClick={onEventClick}
         />
       </div>
@@ -337,6 +399,8 @@ export default function ProfessionalDashboardPage({ token, user, onEditAvailabil
       {schedule?.rules.length > 0 && (
         <UpcomingSessionsCard
           bookings={bookings}
+          blockedDates={schedule?.blocked_dates ?? []}
+          rules={schedule?.rules ?? []}
           loadError={bookingsError}
           onEventClick={handleEventClick}
           panel={panel}
