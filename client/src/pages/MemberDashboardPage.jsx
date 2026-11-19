@@ -75,7 +75,7 @@ export default function MemberDashboardPage({ token, user, onSelectProfessional 
             sx={{
               height: "100%",
               border: 0,
-              // Tailwind's shadow-sm / shadow-md values, applied via sx because MUI's Paper styles override Tailwind utilities.
+              // Subtle card shadow, set via sx because MUI's Paper styles override the theme.
               boxShadow: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
               transition: "all 150ms cubic-bezier(0.4, 0, 0.2, 1)",
               "&:hover": {
@@ -92,13 +92,13 @@ export default function MemberDashboardPage({ token, user, onSelectProfessional 
                 <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
                   <NameAvatar
                     name={professional.name}
-                    sx={{ width: 56, height: 56, bgcolor: "#fde8da", color: "#a4552a" }}
+                    sx={{ width: 56, height: 56, bgcolor: "var(--color-peach)", color: "var(--color-peach-ink)" }}
                   />
                   <Box sx={{ minWidth: 0 }}>
                     <Typography variant="h6" component="h2" noWrap>
                       {professional.name}
                     </Typography>
-                    <Typography variant="body2" noWrap sx={{ color: "#64748b" }}>
+                    <Typography variant="body2" noWrap sx={{ color: "var(--color-slate)" }}>
                       Based in {professional.timezone}
                     </Typography>
                   </Box>

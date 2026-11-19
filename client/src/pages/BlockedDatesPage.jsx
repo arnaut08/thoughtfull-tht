@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
+import CalendarShell from "../components/CalendarShell.jsx";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import { Alert, Box, Button, Card, CardContent, Skeleton, Stack, Typography } from "@mui/material";
@@ -36,8 +37,8 @@ function BlockedDatesPage({ token, user, onBack }) {
   const blockedEvents = useMemo(
     () =>
       blockedDates.flatMap((date) => [
-        { start: date, allDay: true, display: "background", color: "#e7e5e4" },
-        { start: date, allDay: true, title: "Blocked", color: "#78716c", textColor: "#ffffff" },
+        { start: date, allDay: true, display: "background", color: "var(--color-neutral-soft)" },
+        { start: date, allDay: true, title: "Blocked", color: "var(--color-neutral-strong)", textColor: "var(--color-on-primary)" },
       ]),
     [blockedDates],
   );
@@ -92,9 +93,9 @@ function BlockedDatesPage({ token, user, onBack }) {
         onClick={onBack}
         sx={{
           alignSelf: "flex-start",
-          color: "#13595e",
-          borderColor: "#13595e",
-          "&:hover": { borderColor: "#0e474b", bgcolor: "#eff7f6" },
+          color: "primary.main",
+          borderColor: "primary.main",
+          "&:hover": { borderColor: "primary.dark", bgcolor: "action.hover" },
         }}
       >
         Back to profile
@@ -135,6 +136,7 @@ function BlockedDatesPage({ token, user, onBack }) {
 
       <Card>
         <CardContent>
+          <CalendarShell>
           <FullCalendar
             className="session-calendar"
             plugins={[dayGridPlugin, interactionPlugin]}
@@ -147,6 +149,7 @@ function BlockedDatesPage({ token, user, onBack }) {
             dateClick={handleDayClick}
             eventClick={({ event }) => handleDayClick({ dateStr: event.startStr })}
           />
+          </CalendarShell>
         </CardContent>
       </Card>
     </Stack>

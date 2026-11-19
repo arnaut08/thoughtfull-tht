@@ -5,12 +5,17 @@ import {
   Button,
   Card,
   CardContent,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Skeleton,
   Stack,
   Typography,
 } from "@mui/material";
 import EditCalendarOutlinedIcon from "@mui/icons-material/EditCalendarOutlined";
 import FullCalendar from "@fullcalendar/react";
+import CalendarShell from "../components/CalendarShell.jsx";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import { fetchAvailability } from "../api/availability.js";
 import {
@@ -41,14 +46,14 @@ function WelcomeCard({ user, onSetAvailability }) {
               width: 64,
               height: 64,
               borderRadius: "50%",
-              bgcolor: "#eff7f6",
-              color: "#13595e",
+              bgcolor: "var(--color-primary-tint)",
+              color: "var(--color-primary-deep)",
             }}
           >
             <EditCalendarOutlinedIcon sx={{ fontSize: 32 }} />
           </Box>
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="h6" component="h2" sx={{ color: "#0b3538", fontWeight: 600 }}>
+            <Typography variant="h6" component="h2" sx={{ color: "var(--color-primary-ink)", fontWeight: 600 }}>
               Welcome to Thoughtfull-THT, {firstName}!
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -63,8 +68,8 @@ function WelcomeCard({ user, onSetAvailability }) {
             sx={{
               whiteSpace: "nowrap",
               px: 2,
-              bgcolor: "#13595e",
-              "&:hover": { bgcolor: "#0e474b" },
+              bgcolor: "var(--color-primary-deep)",
+              "&:hover": { bgcolor: "var(--color-primary-deep-hover)" },
             }}
           >
             Set your availability
@@ -165,6 +170,7 @@ function UpcomingSessionsCard({ bookings, blockedDates, rules, loadError, onEven
   } else {
     body = (
       <div className="session-calendar">
+        <CalendarShell>
         <FullCalendar
           plugins={[timeGridPlugin]}
           initialView="timeGridWeek"
@@ -182,6 +188,7 @@ function UpcomingSessionsCard({ bookings, blockedDates, rules, loadError, onEven
           events={toCalendarEvents(bookings.slots, blockedDates, rules)}
           eventClick={onEventClick}
         />
+        </CalendarShell>
       </div>
     );
   }
@@ -204,62 +211,88 @@ function UpcomingSessionsCard({ bookings, blockedDates, rules, loadError, onEven
 
 // Cancel or reschedule for the booked session the professional clicked on. Rescheduling only picks an open slot,
 // and the server moves the session in one step, so the member never loses their session without a new time.
-function SessionActions({ timezone, session, rescheduling, newSlot, working, handlers }) {
+function SessionActions({ timezone, rescheduling, newSlot, working, handlers }) {
   const rangeOf = (slot) =>
     `${formatSessionDate(slot.start, timezone)}, ${formatSessionTime(slot.start, timezone)} – ${formatSessionTime(slot.end, timezone)}`;
 
   if (rescheduling) {
     return (
-      <Card>
-        <CardContent>
-          <Stack spacing={2}>
-            <Alert severity="info">
-              Rescheduling your session with <strong>{rescheduling.member.name}</strong>, currently{" "}
-              {rangeOf(rescheduling)}. Click an open session on the calendar for the new time.
-            </Alert>
-            {newSlot && (
-              <Typography>
-                New time: <strong>{rangeOf(newSlot)}</strong>
-              </Typography>
-            )}
-            <Stack direction="row" spacing={1}>
-              <Button variant="contained" onClick={handlers.onConfirmReschedule} disabled={!newSlot || working}>
-                {working ? "Rescheduling…" : "Confirm reschedule"}
-              </Button>
-              <Button onClick={handlers.onStopRescheduling} disabled={working}>
-                Stop
-              </Button>
-            </Stack>
-          </Stack>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (session) {
-    return (
-      <Card>
-        <CardContent>
-          <Stack spacing={2}>
-            <Typography>
-              Session with <strong>{session.member.name}</strong> · {rangeOf(session)}
+      <Box
+        sx={{
+          position: "sticky",
+          bottom: 0,
+          zIndex: 1,
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 2,
+          py: 1.5,
+          bgcolor: "background.paper",
+          borderTop: 1,
+          borderColor: "divider",
+        }}
+      >
+        <Box>
+          <Typography>
+            Rescheduling with <strong>{rescheduling.member.name}</strong>, currently {rangeOf(rescheduling)}. Click an
+            open session on the calendar for the new time.
+          </Typography>
+          {newSlot && (
+            <Typography color="text.secondary">
+              New time: <strong>{rangeOf(newSlot)}</strong>
             </Typography>
-            <Stack direction="row" spacing={1}>
-              <Button variant="outlined" onClick={handlers.onStartReschedule} disabled={working}>
-                Reschedule
-              </Button>
-              <Button color="error" variant="outlined" onClick={handlers.onCancelSession} disabled={working}>
-                {working ? "Cancelling…" : "Cancel session"}
-              </Button>
-            </Stack>
-          </Stack>
-        </CardContent>
-      </Card>
+          )}
+        </Box>
+        <Stack direction="row" spacing={1}>
+          <Button onClick={handlers.onStopRescheduling} disabled={working}>
+            Stop
+          </Button>
+          <Button variant="contained" onClick={handlers.onConfirmReschedule} disabled={!newSlot || working}>
+            {working ? "Rescheduling…" : "Confirm reschedule"}
+          </Button>
+        </Stack>
+      </Box>
     );
   }
 
   return null;
 }
+
+// Opens when a booked session is clicked, mirroring the member's confirm-booking dialog.
+function SessionDialog({ timezone, session, error, working, handlers }) {
+  return (
+    <Dialog open={Boolean(session)} onClose={() => !working && handlers.onClose()} aria-labelledby="session-dialog-title">
+      <DialogTitle id="session-dialog-title">Booked session</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2}>
+          <Typography>
+            Session with <strong>{session?.member.name}</strong>
+          </Typography>
+          <Typography>
+            <strong>
+              {session &&
+                `${formatSessionDate(session.start, timezone)}, ${formatSessionTime(session.start, timezone)} – ${formatSessionTime(session.end, timezone)}`}
+            </strong>
+          </Typography>
+          {error && <Alert severity="error">{error}</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={handlers.onClose} disabled={working}>
+          Close
+        </Button>
+        <Button variant="outlined" onClick={handlers.onStartReschedule} disabled={working}>
+          Reschedule
+        </Button>
+        <Button color="error" variant="outlined" onClick={handlers.onCancelSession} disabled={working}>
+          {working ? "Cancelling…" : "Cancel session"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 
 export default function ProfessionalDashboardPage({ token, user, onEditAvailability }) {
   const [schedule, setSchedule] = useState(null);
@@ -325,6 +358,11 @@ export default function ProfessionalDashboardPage({ token, user, onEditAvailabil
     setActionError("");
   };
 
+  const closeSession = () => {
+    setSelectedStart(null);
+    setActionError("");
+  };
+
   const confirmReschedule = async () => {
     setWorking(true);
     setActionError("");
@@ -370,20 +408,7 @@ export default function ProfessionalDashboardPage({ token, user, onEditAvailabil
           {notice}
         </Alert>
       )}
-      {actionError && <Alert severity="error">{actionError}</Alert>}
-      <SessionActions
-        timezone={timezone}
-        session={session}
-        rescheduling={rescheduling}
-        newSlot={newStart}
-        working={working}
-        handlers={{
-          onStartReschedule: startReschedule,
-          onStopRescheduling: stopRescheduling,
-          onConfirmReschedule: confirmReschedule,
-          onCancelSession: cancelSession,
-        }}
-      />
+      {actionError && !session && <Alert severity="error">{actionError}</Alert>}
     </Stack>
   );
 
@@ -396,7 +421,7 @@ export default function ProfessionalDashboardPage({ token, user, onEditAvailabil
         <Typography color="text.secondary">Signed in as {user.name}</Typography>
       </Box>
       {content}
-      {schedule?.rules.length > 0 && (
+      {(schedule ? schedule.rules.length > 0 : !loadError) && (
         <UpcomingSessionsCard
           bookings={bookings}
           blockedDates={schedule?.blocked_dates ?? []}
@@ -406,6 +431,27 @@ export default function ProfessionalDashboardPage({ token, user, onEditAvailabil
           panel={panel}
         />
       )}
+      <SessionActions
+        timezone={timezone}
+        rescheduling={rescheduling}
+        newSlot={newStart}
+        working={working}
+        handlers={{
+          onStopRescheduling: stopRescheduling,
+          onConfirmReschedule: confirmReschedule,
+        }}
+      />
+      <SessionDialog
+        timezone={timezone}
+        session={session}
+        error={actionError}
+        working={working}
+        handlers={{
+          onClose: closeSession,
+          onStartReschedule: startReschedule,
+          onCancelSession: cancelSession,
+        }}
+      />
     </Stack>
   );
 }

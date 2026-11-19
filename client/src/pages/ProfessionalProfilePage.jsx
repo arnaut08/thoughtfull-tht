@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
+import CalendarShell from "../components/CalendarShell.jsx";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import {
   Alert,
@@ -15,6 +16,8 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+import CheckIcon from "@mui/icons-material/Check";
+import TimezoneLabel from "../components/TimezoneLabel.jsx";
 import {
   bookProfessionalSlot,
   fetchProfessionalProfile,
@@ -148,7 +151,6 @@ export default function ProfessionalProfilePage({
     });
     return profile.slots.map((slot) => {
       const isCurrent = slot.start === profile.reschedule?.start;
-      const isSelected = slot.start === selectedSlot?.start;
       const start = toWallClockDate(new Date(slot.start), memberTimezone);
       const midnight = new Date(start);
       midnight.setUTCHours(24, 0, 0, 0);
@@ -156,7 +158,6 @@ export default function ProfessionalProfilePage({
       const range = `${clock.format(new Date(slot.start))} – ${clock.format(new Date(slot.end))}`;
       const classNames = [];
       if (isCurrent) classNames.push("current-session");
-      if (isSelected) classNames.push("slot-selected");
       return {
         id: slot.start,
         title: isCurrent ? `Current · ${range}` : range,
@@ -169,6 +170,23 @@ export default function ProfessionalProfilePage({
 
   const today = toWallClockDate(new Date(), memberTimezone).toISOString().slice(0, 10);
 
+  // The session being rescheduled is not a free slot, so it gets no slot styling.
+  const slotClassNames = ({ event }) => {
+    if (event.id === profile?.reschedule?.start) return [];
+    return event.id === selectedSlot?.start ? ["tf-slot", "is-selected"] : ["tf-slot"];
+  };
+
+  const renderSlot = ({ event }) => (
+    <Box
+      component="span"
+      className="fc-event-title"
+      sx={{ display: "inline-flex", alignItems: "center", gap: 0.5 }}
+    >
+      {event.id === selectedSlot?.start && <CheckIcon fontSize="inherit" aria-hidden="true" />}
+      {event.title}
+    </Box>
+  );
+
   return (
     <Stack spacing={2}>
       <Button
@@ -176,9 +194,9 @@ export default function ProfessionalProfilePage({
         onClick={onBack}
         sx={{
           alignSelf: "flex-start",
-          color: "#13595e",
-          borderColor: "#13595e",
-          "&:hover": { borderColor: "#0e474b", bgcolor: "#eff7f6" },
+          color: "primary.main",
+          borderColor: "primary.main",
+          "&:hover": { borderColor: "primary.dark", bgcolor: "action.hover" },
         }}
       >
         {rescheduleBookingId ? "Back to my sessions" : "Back to professionals"}
@@ -205,9 +223,7 @@ export default function ProfessionalProfilePage({
             <Typography variant="h5" component="h1">
               {profile.professional.name}
             </Typography>
-            <Typography color="text.secondary">
-              Open sessions in the next 4 weeks · Times are in {memberTimezone}
-            </Typography>
+            <Typography color="text.secondary">Open sessions in the next 4 weeks</Typography>
             {profile.min_booking_notice_hours > 0 && (
               <Typography color="text.secondary">
                 Sessions must be booked at least {profile.min_booking_notice_hours}{" "}
@@ -247,7 +263,11 @@ export default function ProfessionalProfilePage({
 
           <Card>
             <CardContent>
+              <Box sx={{ mb: 2 }}>
+                <TimezoneLabel timezone={memberTimezone} />
+              </Box>
               <div className="session-calendar">
+                <CalendarShell>
                 <FullCalendar
                   plugins={[dayGridPlugin]}
                   initialView="dayGridWeek"
@@ -261,8 +281,11 @@ export default function ProfessionalProfilePage({
                   eventDisplay="block"
                   height="auto"
                   events={events}
+                  eventClassNames={slotClassNames}
+                  eventContent={renderSlot}
                   eventClick={handleEventClick}
                 />
+                </CalendarShell>
               </div>
             </CardContent>
           </Card>

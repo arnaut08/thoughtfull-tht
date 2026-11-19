@@ -16,6 +16,7 @@ import {
   ListItemText,
   MenuItem,
   Select,
+  Skeleton,
   Stack,
   Typography,
 } from "@mui/material";
@@ -159,7 +160,14 @@ function SessionConflictDialog({ token, timezone, date, sessions, onBlocked, onC
             </Typography>
           )}
 
-          {mode === "reschedule" && (
+          {mode === "reschedule" && !suggestionsLoaded && busy && (
+            <Stack spacing={1.5} aria-busy="true">
+              <Skeleton variant="rounded" height={64} />
+              <Skeleton variant="rounded" height={64} />
+            </Stack>
+          )}
+
+          {mode === "reschedule" && suggestionsLoaded && (
             <Stack spacing={1.5}>
               {remaining.map((session) => {
                 const chosen = choices[session.id];
@@ -254,7 +262,7 @@ function SessionConflictDialog({ token, timezone, date, sessions, onBlocked, onC
               variant="contained"
               onClick={openReschedule}
               disabled={busy}
-              sx={{ bgcolor: "#13595e", "&:hover": { bgcolor: "#0e474b" } }}
+              sx={{ bgcolor: "var(--color-primary-deep)", "&:hover": { bgcolor: "var(--color-primary-deep-hover)" } }}
             >
               Reschedule sessions
             </Button>
@@ -268,7 +276,7 @@ function SessionConflictDialog({ token, timezone, date, sessions, onBlocked, onC
               variant="contained"
               onClick={moveSessionsAndBlock}
               disabled={busy || !allChosen || remaining.length === 0}
-              sx={{ bgcolor: "#13595e", "&:hover": { bgcolor: "#0e474b" } }}
+              sx={{ bgcolor: "var(--color-primary-deep)", "&:hover": { bgcolor: "var(--color-primary-deep-hover)" } }}
             >
               {busy ? "Moving sessions…" : "Move sessions and block day"}
             </Button>

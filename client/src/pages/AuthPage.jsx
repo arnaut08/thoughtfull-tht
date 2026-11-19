@@ -7,33 +7,36 @@ import {
   Card,
   CardContent,
   CircularProgress,
-  MenuItem,
   Stack,
   Tab,
   Tabs,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
-import SpaIcon from "@mui/icons-material/Spa";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { login, register } from "../api/auth.js";
-
-const BRAND_700 = "#13595e";
-const BRAND_800 = "#0e474b";
-const BRAND_900 = "#0b3538";
 
 const ROLES = [
   { value: "member", label: "Member" },
   { value: "professional", label: "Professional" },
 ];
 
+const INTROS = {
+  signin: "Good to see you again. Sign in to pick up where you left off.",
+  signup: "It takes a minute to set up. Tell us how you'll use ThoughtFull.",
+};
+
 function browserTimezone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
-const TIMEZONE_OPTIONS =
-  typeof Intl.supportedValuesOf === "function"
-    ? Intl.supportedValuesOf("timeZone")
-    : [browserTimezone()];
+const TIMEZONE_OPTIONS = (() => {
+  const zone = browserTimezone();
+  const zones = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
+  return zones.includes(zone) ? zones : [zone, ...zones];
+})();
 
 const EMPTY_FORM = {
   name: "",
@@ -43,9 +46,9 @@ const EMPTY_FORM = {
   timezone: browserTimezone(),
 };
 
-export default function AuthPage({ onAuthenticated }) {
-  const [mode, setMode] = useState("signin");
-  const [form, setForm] = useState(EMPTY_FORM);
+export default function AuthPage({ onAuthenticated, initialMode = "signin", initialRole = "member", onBack }) {
+  const [mode, setMode] = useState(initialMode);
+  const [form, setForm] = useState({ ...EMPTY_FORM, role: initialRole });
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -56,6 +59,10 @@ export default function AuthPage({ onAuthenticated }) {
     setMode(nextMode);
     setFieldErrors({});
     setFormError("");
+  }
+
+  function handleRoleChange(_event, nextRole) {
+    if (nextRole) setForm((current) => ({ ...current, role: nextRole }));
   }
 
   function handleChange(event) {
@@ -84,36 +91,29 @@ export default function AuthPage({ onAuthenticated }) {
 
   return (
     <Box
-      component="main"
-      sx={{ minHeight: "100vh", display: "grid", placeItems: "center", p: 2, bgcolor: "#fafaf9" }}
+      sx={{ display: "grid", placeItems: "center", p: 2, py: 6, bgcolor: "background.default" }}
     >
-      <Card
-        sx={{
-          width: "100%",
-          maxWidth: 440,
-          border: 0,
-          borderRadius: 4,
-          boxShadow: "0 1px 2px rgb(0 0 0 / 0.05)",
-        }}
-      >
+      <Card sx={{ width: "100%", maxWidth: 440 }}>
         <CardContent sx={{ p: 4 }}>
-          <Stack direction="row" spacing={1.5} sx={{ mb: 3, px: 0.5, alignItems: "center" }}>
-            <SpaIcon sx={{ color: BRAND_700 }} />
-            <Typography variant="h6" component="span" fontWeight={700} sx={{ color: BRAND_900 }}>
-              Thoughtfull-THT
+          <Stack spacing={1} sx={{ mb: 3 }}>
+            {onBack && (
+              <Button
+                variant="text"
+                onClick={onBack}
+                startIcon={<ArrowBackIcon />}
+                sx={{ alignSelf: "flex-start", ml: -1 }}
+              >
+                Back
+              </Button>
+            )}
+            <Typography variant="h5" component="span" color="primary.main">
+              ThoughtFull
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {INTROS[mode]}
             </Typography>
           </Stack>
-          <Tabs
-            value={mode}
-            onChange={handleModeChange}
-            variant="fullWidth"
-            sx={{
-              mb: 3,
-              "& .MuiTab-root": { textTransform: "none", fontWeight: 500, color: "#78716c" },
-              "& .MuiTab-root.Mui-selected": { color: BRAND_800, fontWeight: 600 },
-              "& .MuiTabs-indicator": { backgroundColor: BRAND_700 },
-            }}
-          >
+          <Tabs value={mode} onChange={handleModeChange} variant="fullWidth" sx={{ mb: 3 }}>
             <Tab value="signin" label="Sign in" />
             <Tab value="signup" label="Sign up" />
           </Tabs>
@@ -124,17 +124,7 @@ export default function AuthPage({ onAuthenticated }) {
             </Alert>
           )}
 
-          <Box
-            component="form"
-            onSubmit={handleSubmit}
-            noValidate
-            sx={{
-              "& .MuiInputLabel-root.Mui-focused": { color: BRAND_700 },
-              "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline": {
-                borderColor: BRAND_700,
-              },
-            }}
-          >
+          <Box component="form" onSubmit={handleSubmit} noValidate>
             <Stack spacing={2}>
               {isSignUp && (
                 <TextField
@@ -174,22 +164,28 @@ export default function AuthPage({ onAuthenticated }) {
                 fullWidth
               />
               {isSignUp && (
-                <TextField
-                  select
-                  label="I am a"
-                  name="role"
-                  value={form.role}
-                  onChange={handleChange}
-                  error={Boolean(fieldErrors.role)}
-                  helperText={fieldErrors.role}
-                  fullWidth
-                >
-                  {ROLES.map((role) => (
-                    <MenuItem key={role.value} value={role.value}>
-                      {role.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                <Box>
+                  <Typography variant="body2" color="text.secondary" id="role-label" sx={{ mb: 1 }}>
+                    I am a
+                  </Typography>
+                  <ToggleButtonGroup
+                    exclusive
+                    aria-labelledby="role-label"
+                    value={form.role}
+                    onChange={handleRoleChange}
+                  >
+                    {ROLES.map((role) => (
+                      <ToggleButton key={role.value} value={role.value}>
+                        {role.label}
+                      </ToggleButton>
+                    ))}
+                  </ToggleButtonGroup>
+                  {fieldErrors.role && (
+                    <Typography variant="caption" color="error" sx={{ display: "block", mt: 0.5 }}>
+                      {fieldErrors.role}
+                    </Typography>
+                  )}
+                </Box>
               )}
               {isSignUp && (
                 <Autocomplete
@@ -215,13 +211,6 @@ export default function AuthPage({ onAuthenticated }) {
                 variant="contained"
                 size="large"
                 disabled={submitting}
-                sx={{
-                  bgcolor: BRAND_700,
-                  boxShadow: "none",
-                  textTransform: "none",
-                  fontWeight: 600,
-                  "&:hover": { bgcolor: BRAND_800, boxShadow: "none" },
-                }}
                 startIcon={submitting ? <CircularProgress size={18} color="inherit" /> : null}
               >
                 {isSignUp ? "Create account" : "Sign in"}

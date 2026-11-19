@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Box, Skeleton, Stack } from "@mui/material";
 import AuthPage from "./pages/AuthPage.jsx";
+import LandingPage from "./pages/LandingPage.jsx";
 import AppShell from "./components/AppShell.jsx";
+import PublicLayout from "./components/PublicLayout.jsx";
 import { fetchCurrentUser } from "./api/auth.js";
 
 const TOKEN_KEY = "thoughtfull-tht.token";
@@ -10,6 +12,7 @@ function App() {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY));
   const [user, setUser] = useState(null);
   const [checkingSession, setCheckingSession] = useState(Boolean(token));
+  const [entry, setEntry] = useState(null);
 
   useEffect(() => {
     if (!token) return;
@@ -33,6 +36,7 @@ function App() {
     localStorage.removeItem(TOKEN_KEY);
     setToken(null);
     setUser(null);
+    setEntry(null);
   }
 
   if (checkingSession) {
@@ -54,7 +58,24 @@ function App() {
   }
 
   if (!token || !user) {
-    return <AuthPage onAuthenticated={handleAuthenticated} />;
+    const goHome = () => setEntry(null);
+    const goLogin = () => setEntry({ mode: "signin", role: "member" });
+    const goSignup = () => setEntry({ mode: "signup", role: "member" });
+
+    return (
+      <PublicLayout onHome={goHome} onLogin={goLogin} onSignup={goSignup}>
+        {entry ? (
+          <AuthPage
+            onAuthenticated={handleAuthenticated}
+            initialMode={entry.mode}
+            initialRole={entry.role}
+            onBack={goHome}
+          />
+        ) : (
+          <LandingPage onFindProfessional={goSignup} onLogin={goLogin} />
+        )}
+      </PublicLayout>
+    );
   }
 
   return <AppShell token={token} user={user} onSignOut={handleSignOut} />;
