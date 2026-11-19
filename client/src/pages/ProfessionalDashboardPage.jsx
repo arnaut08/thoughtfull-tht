@@ -211,7 +211,7 @@ function UpcomingSessionsCard({ bookings, blockedDates, rules, loadError, onEven
 
 // Cancel or reschedule for the booked session the professional clicked on. Rescheduling only picks an open slot,
 // and the server moves the session in one step, so the member never loses their session without a new time.
-function SessionActions({ timezone, rescheduling, newSlot, working, handlers }) {
+function SessionActions({ timezone, rescheduling, newSlot, error, working, handlers }) {
   const rangeOf = (slot) =>
     `${formatSessionDate(slot.start, timezone)}, ${formatSessionTime(slot.start, timezone)} – ${formatSessionTime(slot.end, timezone)}`;
 
@@ -233,6 +233,11 @@ function SessionActions({ timezone, rescheduling, newSlot, working, handlers }) 
           borderColor: "divider",
         }}
       >
+        {error && (
+          <Alert severity="error" sx={{ width: "100%" }}>
+            {error}
+          </Alert>
+        )}
         <Box>
           <Typography>
             Rescheduling with <strong>{rescheduling.member.name}</strong>, currently {rangeOf(rescheduling)}. Click an
@@ -408,7 +413,7 @@ export default function ProfessionalDashboardPage({ token, user, onEditAvailabil
           {notice}
         </Alert>
       )}
-      {actionError && !session && <Alert severity="error">{actionError}</Alert>}
+      {actionError && !session && !rescheduling && <Alert severity="error">{actionError}</Alert>}
     </Stack>
   );
 
@@ -435,6 +440,7 @@ export default function ProfessionalDashboardPage({ token, user, onEditAvailabil
         timezone={timezone}
         rescheduling={rescheduling}
         newSlot={newStart}
+        error={actionError}
         working={working}
         handlers={{
           onStopRescheduling: stopRescheduling,

@@ -20,6 +20,8 @@ export const bookingsRouter = Router();
 export const professionalBookingsRouter = Router();
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const memberConflictMessage =
+  "The member already has another session that conflicts with this time, so the session can't be moved here";
 
 bookingsRouter.use(requireAuth, requireMember);
 
@@ -205,9 +207,19 @@ professionalBookingsRouter.post("/:id/reschedule", async (request, response) => 
   }
   const member = await findUserById(booking.member_id);
 
-  const slots = await loadOpenSlots(professional, member, DateTime.utc(), booking.id);
+  const now = DateTime.utc();
+  const slots = await loadOpenSlots(professional, member, now, booking.id);
   const slot = slots.find((candidate) => candidate.start.toMillis() === startsAt.toMillis());
   if (!slot) {
+    // Slots are hidden when the member has another session then. Check the professional's time alone to tell
+    // that apart from a slot that is really taken.
+    const professionalSlots = await loadOpenSlots(professional, member, now, booking.id, { checkMember: false });
+    const freeForProfessional = professionalSlots.some(
+      (candidate) => candidate.start.toMillis() === startsAt.toMillis(),
+    );
+    if (freeForProfessional) {
+      return response.status(409).json({ error: memberConflictMessage });
+    }
     return response.status(409).json({ error: "That session is no longer available" });
   }
 
@@ -225,7 +237,7 @@ professionalBookingsRouter.post("/:id/reschedule", async (request, response) => 
       return response.status(404).json({ error: "Session not found" });
     }
     if (error.message === "member_conflict") {
-      return response.status(409).json({ error: "The member already has a session at this time" });
+      return response.status(409).json({ error: memberConflictMessage });
     }
     if (error.message === "slot_unavailable" || error.message === "slot_in_past") {
       return response.status(409).json({ error: "That session is no longer available" });
