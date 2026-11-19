@@ -659,6 +659,22 @@ describe("/api/availability", () => {
     expect(get.body).toEqual({ timezone: "Asia/Kolkata", rules: expected, blocked_dates: [] });
   });
 
+  test("saves the minimum booking notice, returns it with the schedule, and rejects invalid hours", async () => {
+    const { token } = addUser("professional");
+    const auth = (req) => req.set("Authorization", `Bearer ${token}`);
+
+    const saved = await auth(request(app).put("/api/availability/booking-notice")).send({ hours: 6 });
+    const invalid = await auth(request(app).put("/api/availability/booking-notice")).send({ hours: 169 });
+    const fractional = await auth(request(app).put("/api/availability/booking-notice")).send({ hours: 1.5 });
+    const get = await auth(request(app).get("/api/availability"));
+
+    expect(saved.status).toBe(200);
+    expect(saved.body).toEqual({ min_booking_notice_hours: 6 });
+    expect(invalid.status).toBe(400);
+    expect(fractional.status).toBe(400);
+    expect(get.body.min_booking_notice_hours).toBe(6);
+  });
+
   test("blocks and unblocks calendar dates, returning them sorted and without duplicates", async () => {
     const { token } = addUser("professional");
     const block = (date) =>
@@ -912,6 +928,21 @@ describe("generateOpenSlots", () => {
     expect(slots.some((slot) => slot.start < booked[0].end && slot.end > booked[0].start)).toBe(false);
   });
 
+  test("skips sessions that start sooner than the minimum booking notice", () => {
+    const now = DateTime.fromISO("2026-03-01T10:00:00Z");
+    const slots = generateOpenSlots({
+      rules: [rule(0, "00:00", "24:00")],
+      timezone: "UTC",
+      now,
+      horizonEnd: now.plus({ days: 1 }),
+      minNoticeHours: 2,
+    });
+
+    // The 50-minute grid from midnight has no slot at 11:40 (starts too soon) and the first is at 12:30.
+    expect(slots.every((slot) => slot.start >= now.plus({ hours: 2 }))).toBe(true);
+    expect(slots[0].start.toUTC().toISO()).toBe("2026-03-01T12:30:00.000Z");
+  });
+
   test("skips every session on a blocked date in the professional's timezone, not UTC", () => {
     // 00:30 IST on 1 Mar is still 28 Feb in UTC, so the blocked date must be matched in the professional's zone.
     const now = DateTime.fromISO("2026-02-28T00:00:00Z");
@@ -1134,6 +1165,36 @@ describe("/api/professionals", () => {
 
       expect(response.status).toBe(409);
       expect(bookingRows).toHaveLength(0);
+    });
+
+    test("rejects a slot that starts sooner than the professional's minimum booking notice", async () => {
+      const { token } = addUser("member", "America/New_York");
+      const { user: professional } = addUser("professional", "Asia/Kolkata");
+      scheduleEveryDay(professional.id);
+      const [slot] = (await request(app).get(`/api/professionals/${professional.id}`).set("Authorization", `Bearer ${token}`)).body.slots;
+      const hoursUntilSlot = DateTime.fromISO(slot.start).diffNow("hours").hours;
+      professional.min_booking_notice_hours = Math.ceil(hoursUntilSlot) + 1;
+
+      const response = await bookingRequest(token, professional.id, { starts_at: slot.start });
+
+      expect(response.status).toBe(409);
+      expect(bookingRows).toHaveLength(0);
+    });
+
+    test("offers only slots that start after the minimum booking notice", async () => {
+      const { token } = addUser("member", "America/New_York");
+      const { user: professional } = addUser("professional", "Asia/Kolkata");
+      scheduleEveryDay(professional.id);
+      professional.min_booking_notice_hours = 6;
+
+      const profile = await request(app)
+        .get(`/api/professionals/${professional.id}`)
+        .set("Authorization", `Bearer ${token}`);
+
+      const earliest = DateTime.utc().plus({ hours: 6 });
+      expect(profile.body.min_booking_notice_hours).toBe(6);
+      expect(profile.body.slots.length).toBeGreaterThan(0);
+      expect(profile.body.slots.every((slot) => DateTime.fromISO(slot.start) >= earliest)).toBe(true);
     });
 
     test("returns 409 with a member conflict message when the database rejects an overlapping member booking", async () => {

@@ -191,6 +191,12 @@ export default function ProfessionalProfilePage({
             <Typography color="text.secondary">
               Open sessions in the next 4 weeks · Times are in {memberTimezone}
             </Typography>
+            {profile.min_booking_notice_hours > 0 && (
+              <Typography color="text.secondary">
+                Sessions must be booked at least {profile.min_booking_notice_hours}{" "}
+                {profile.min_booking_notice_hours === 1 ? "hour" : "hours"} in advance.
+              </Typography>
+            )}
           </Box>
 
           {profile.reschedule && (

@@ -93,6 +93,15 @@
   sequential, so a failure partway leaves earlier moves in place and the dialog lists the sessions still to move.
 - Blocked dates are managed on their own page, opened from the professional's profile, with a month calendar where clicking a day toggles its block. Weekly hours stay on the availability page.
 
+## Booking notice
+- A professional can require whole hours of notice before a session starts (`users.min_booking_notice_hours`, migration
+  `0011_booking_notice.sql`). 0 means no minimum, and the maximum is 168 hours.
+- `PUT /api/availability/booking-notice` saves it. `GET /api/availability` and `GET /api/professionals/:id` return it.
+- `generateOpenSlots` drops any session that starts before now plus the notice. Member bookings and member reschedules
+  both use those slots, so both respect the notice. The server rejects a slot that doesn't meet it with 409.
+- The notice doesn't apply to professionals. Their reschedule suggestions and their own reschedules and cancellations
+  aren't limited by it.
+
 ## Timezone changes
 - Changing `users.timezone` keeps the local hours. Monday 09:00 stays 09:00 in the
   new zone.

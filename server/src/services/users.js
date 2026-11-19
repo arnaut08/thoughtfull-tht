@@ -42,6 +42,15 @@ export async function createUser({ email, passwordHash, name, role, timezone }) 
   return data;
 }
 
+export async function setBookingNotice(userId, hours) {
+  const { error } = await supabase
+    .from("users")
+    .update({ min_booking_notice_hours: hours })
+    .eq("id", userId);
+
+  if (error) throw error;
+}
+
 export async function findUserByEmail(email) {
   const { data, error } = await supabase
     .from("users")

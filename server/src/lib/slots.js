@@ -27,8 +27,18 @@ function localInstant(day, minutes, zone) {
 // [now, horizonEnd), skipping any session that overlaps a booking.
 // rules: [{ day_of_week, start_time, end_time }] in HH:mm; booked: [{ start, end }] as DateTimes.
 // blockedDates: YYYY-MM-DD dates in the professional's timezone that have no slots at all.
-export function generateOpenSlots({ rules, timezone, now, horizonEnd, booked = [], blockedDates = [] }) {
+// minNoticeHours: a session must start at least this many hours after now.
+export function generateOpenSlots({
+  rules,
+  timezone,
+  now,
+  horizonEnd,
+  booked = [],
+  blockedDates = [],
+  minNoticeHours = 0,
+}) {
   const sessionLength = { minutes: SESSION_MINUTES };
+  const earliestStart = now.plus({ hours: minNoticeHours });
   const blocked = new Set(blockedDates);
   const firstDay = now.setZone(timezone).startOf("day").minus({ days: 1 });
   const lastDay = horizonEnd.setZone(timezone).startOf("day").plus({ days: 1 });
@@ -46,7 +56,7 @@ export function generateOpenSlots({ rules, timezone, now, horizonEnd, booked = [
       // Steps by absolute time so a session keeps its 50-minute length across DST changes.
       for (let start = windowStart; start.plus(sessionLength) <= windowEnd; start = start.plus(sessionLength)) {
         const end = start.plus(sessionLength);
-        if (start < now || end > horizonEnd) continue;
+        if (start < earliestStart || end > horizonEnd) continue;
         if (booked.some((booking) => start < booking.end && end > booking.start)) continue;
         slots.push({ start, end });
       }

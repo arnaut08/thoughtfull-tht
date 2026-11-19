@@ -8,14 +8,17 @@ import {
   Button,
   Card,
   CardContent,
+  InputAdornment,
   Skeleton,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
-import { fetchAvailability, saveAvailability } from "../api/availability.js";
+import { fetchAvailability, saveAvailability, saveBookingNotice } from "../api/availability.js";
 import { DAY_NAMES } from "../lib/schedule.js";
 
 const MIN_WINDOW_MINUTES = 50;
+const MAX_NOTICE_HOURS = 168;
 const MINUTE_MS = 60_000;
 const DAY_MS = 24 * 60 * MINUTE_MS;
 
@@ -88,6 +91,9 @@ function AvailabilityPage({ token, user, onBack }) {
   const [savedRules, setSavedRules] = useState([]);
   const [events, setEvents] = useState([]);
   const [timezone, setTimezone] = useState("");
+  const [savedNotice, setSavedNotice] = useState(0);
+  const [noticeDraft, setNoticeDraft] = useState("0");
+  const [savingNotice, setSavingNotice] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -99,6 +105,8 @@ function AvailabilityPage({ token, user, onBack }) {
       .then((data) => {
         if (!active) return;
         setTimezone(data.timezone);
+        setSavedNotice(data.min_booking_notice_hours);
+        setNoticeDraft(String(data.min_booking_notice_hours));
         setSavedRules(data.rules);
         setEvents(data.rules.map(ruleToEvent));
       })
@@ -174,6 +182,26 @@ function AvailabilityPage({ token, user, onBack }) {
     }
   }
 
+  const noticeHours = Number(noticeDraft);
+  const isNoticeValid =
+    noticeDraft !== "" && Number.isInteger(noticeHours) && noticeHours >= 0 && noticeHours <= MAX_NOTICE_HOURS;
+  const isNoticeDirty = isNoticeValid && noticeHours !== savedNotice;
+
+  async function handleSaveNotice() {
+    setSavingNotice(true);
+    setMessage(null);
+    try {
+      const data = await saveBookingNotice(token, noticeHours);
+      setSavedNotice(data.min_booking_notice_hours);
+      setNoticeDraft(String(data.min_booking_notice_hours));
+      setMessage({ severity: "success", text: "Booking notice saved." });
+    } catch (error) {
+      setMessage({ severity: "error", text: error.message });
+    } finally {
+      setSavingNotice(false);
+    }
+  }
+
   if (loading) {
     return (
       <Stack spacing={2} aria-busy="true" aria-live="polite">
@@ -235,6 +263,52 @@ function AvailabilityPage({ token, user, onBack }) {
           ))}
         </Alert>
       )}
+
+      <Card>
+        <CardContent>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            sx={{ alignItems: { xs: "stretch", sm: "center" }, justifyContent: "space-between" }}
+          >
+            <Box>
+              <Typography variant="subtitle1" component="h2" fontWeight={600}>
+                Minimum booking notice
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Members must book at least this many hours ahead. 0 means no minimum.
+              </Typography>
+            </Box>
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: "center", flexShrink: 0 }}>
+              <TextField
+                size="small"
+                type="number"
+                value={noticeDraft}
+                onChange={(event) => setNoticeDraft(event.target.value)}
+                error={noticeDraft !== "" && !isNoticeValid}
+                slotProps={{
+                  htmlInput: { "aria-label": "Minimum booking notice in hours", min: 0, max: MAX_NOTICE_HOURS, step: 1 },
+                  input: { endAdornment: <InputAdornment position="end">hours</InputAdornment> },
+                }}
+                sx={{ width: 150 }}
+              />
+              <Button
+                variant="contained"
+                onClick={handleSaveNotice}
+                disabled={!isNoticeDirty || savingNotice}
+                sx={{ height: 40, minWidth: 120 }}
+              >
+                {savingNotice ? "Saving…" : "Save notice"}
+              </Button>
+            </Stack>
+          </Stack>
+          {noticeDraft !== "" && !isNoticeValid && (
+            <Typography variant="caption" color="error" component="p" sx={{ mt: 1 }}>
+              Enter a whole number of hours from 0 to {MAX_NOTICE_HOURS}.
+            </Typography>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent>
