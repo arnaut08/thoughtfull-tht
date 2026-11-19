@@ -17,6 +17,22 @@ function describeNotification(notification, timezone) {
   return `${notification.actor.name} cancelled the session scheduled for ${when}.`;
 }
 
+const RELATIVE_UNITS = [
+  { unit: "day", ms: 24 * 60 * 60 * 1000 },
+  { unit: "hour", ms: 60 * 60 * 1000 },
+  { unit: "minute", ms: 60 * 1000 },
+];
+
+// Older than a week falls back to the date, since "3 weeks ago" reads poorly.
+function formatRelativeTime(iso, timezone) {
+  const elapsed = Date.now() - new Date(iso).getTime();
+  if (elapsed >= 7 * RELATIVE_UNITS[0].ms) return formatSessionDate(iso, timezone);
+  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  const match = RELATIVE_UNITS.find(({ ms }) => elapsed >= ms);
+  if (!match) return "just now";
+  return formatter.format(-Math.floor(elapsed / match.ms), match.unit);
+}
+
 export default function NotificationsTray({ open, token, timezone, onClose, onMarkedRead }) {
   const [notifications, setNotifications] = useState([]);
   const [error, setError] = useState("");
@@ -75,10 +91,26 @@ export default function NotificationsTray({ open, token, timezone, onClose, onMa
       ) : (
         <List disablePadding>
           {notifications.map((notification) => (
-            <ListItem key={notification.id} divider sx={{ bgcolor: notification.read ? "transparent" : "#f0f9f8" }}>
+            <ListItem
+              key={notification.id}
+              divider
+              alignItems="flex-start"
+              sx={{ bgcolor: notification.read ? "transparent" : "surface.main", gap: 1.5 }}
+            >
+              <Box
+                aria-label={notification.read ? undefined : "Unread"}
+                sx={{
+                  width: 8,
+                  height: 8,
+                  mt: 1,
+                  flexShrink: 0,
+                  borderRadius: "50%",
+                  bgcolor: notification.read ? "transparent" : "primary.main",
+                }}
+              />
               <ListItemText
                 primary={describeNotification(notification, timezone)}
-                secondary={formatSessionDate(notification.createdAt, timezone)}
+                secondary={formatRelativeTime(notification.createdAt, timezone)}
               />
             </ListItem>
           ))}

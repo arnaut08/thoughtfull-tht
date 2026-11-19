@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Alert, Box, Button, Card, CardContent, Chip, Divider, Skeleton, Stack, Typography } from "@mui/material";
 import NameAvatar from "../components/NameAvatar.jsx";
+import InitialsAvatar from "../components/InitialsAvatar.jsx";
+import StatusChip from "../components/StatusChip.jsx";
 import { cancelMemberBooking, fetchMemberBookings } from "../api/bookings.js";
 import { formatSessionDate, formatSessionTime } from "../lib/schedule.js";
 
@@ -13,20 +15,34 @@ function DetailRow({ label, value }) {
   );
 }
 
-function SessionRowSkeleton() {
+function SessionCard({ name, start, end, status, timezone, actions }) {
   return (
-    <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
-      <Skeleton variant="circular" width={40} height={40} />
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Skeleton variant="text" width="50%" />
-        <Skeleton variant="text" width="30%" />
-      </Box>
-    </Stack>
+    <Card variant="outlined">
+      <CardContent>
+        <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
+          <InitialsAvatar name={name} sx={{ width: 40, height: 40 }} />
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: "center", minWidth: 0 }}>
+              <Typography noWrap fontWeight={500}>
+                {name}
+              </Typography>
+              <StatusChip status={status} />
+            </Stack>
+            <Typography variant="body2" color="text.secondary">
+              {formatSessionDate(start, timezone)} · {formatSessionTime(start, timezone)} –{" "}
+              {formatSessionTime(end, timezone)}
+            </Typography>
+          </Box>
+        </Stack>
+        {actions && <Box sx={{ mt: 2 }}>{actions}</Box>}
+      </CardContent>
+    </Card>
   );
 }
 
 // sessions is null while loading, which shows skeleton rows. onCancel and onReschedule are passed only for upcoming sessions.
 function SessionGroup({ title, sessions, timezone, emptyText, onCancel, onReschedule, cancelingId }) {
+  const status = onCancel ? "upcoming" : "past";
   return (
     <Box>
       <Typography variant="subtitle1" component="h3" fontWeight={600}>
@@ -35,8 +51,8 @@ function SessionGroup({ title, sessions, timezone, emptyText, onCancel, onResche
 
       {sessions === null && (
         <Stack spacing={2} sx={{ mt: 1.5 }} aria-busy="true">
-          <SessionRowSkeleton />
-          <SessionRowSkeleton />
+          <Skeleton variant="rounded" height={88} />
+          <Skeleton variant="rounded" height={88} />
         </Stack>
       )}
 
@@ -47,29 +63,22 @@ function SessionGroup({ title, sessions, timezone, emptyText, onCancel, onResche
       )}
 
       {sessions?.length > 0 && (
-        <Stack spacing={2} divider={<Divider flexItem />} sx={{ mt: 1.5 }}>
+        <Stack spacing={2} sx={{ mt: 1.5 }}>
           {sessions.map((session) => (
-            <Stack key={session.id} direction="row" spacing={2} sx={{ alignItems: "center" }}>
-              <NameAvatar
-                name={session.professional.name}
-                sx={{ width: 40, height: 40, bgcolor: "#fde8da", color: "#a4552a" }}
-              />
-              <Box sx={{ minWidth: 0, flex: 1 }}>
-                <Typography noWrap fontWeight={500}>
-                  {session.professional.name}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {formatSessionDate(session.start, timezone)} ·{" "}
-                  {formatSessionTime(session.start, timezone)} –{" "}
-                  {formatSessionTime(session.end, timezone)}
-                </Typography>
-              </Box>
-              {onCancel &&
-                (session.cancellable ? (
-                  <Stack direction="row" spacing={1}>
+            <SessionCard
+              key={session.id}
+              name={session.professional.name}
+              start={session.start}
+              end={session.end}
+              status={status}
+              timezone={timezone}
+              actions={
+                onCancel && (
+                  <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", rowGap: 1 }}>
                     <Button
                       size="small"
-                      disabled={cancelingId !== null}
+                      variant="outlined"
+                      disabled={!session.cancellable || cancelingId !== null}
                       onClick={() => onReschedule(session)}
                     >
                       Reschedule
@@ -77,24 +86,28 @@ function SessionGroup({ title, sessions, timezone, emptyText, onCancel, onResche
                     <Button
                       color="error"
                       size="small"
-                      disabled={cancelingId !== null}
+                      variant="outlined"
+                      disabled={!session.cancellable || cancelingId !== null}
                       onClick={() => onCancel(session)}
                     >
                       {cancelingId === session.id ? "Cancelling…" : "Cancel"}
                     </Button>
+                    {!session.cancellable && (
+                      <Typography variant="body2" color="text.secondary">
+                        Sessions can be changed up to 24 hours before they start
+                      </Typography>
+                    )}
                   </Stack>
-                ) : (
-                  <Typography variant="caption" color="text.secondary" sx={{ maxWidth: 160, textAlign: "right" }}>
-                    Starts within 24 hours, so it can't be changed.
-                  </Typography>
-                ))}
-            </Stack>
+                )
+              }
+            />
           ))}
         </Stack>
       )}
     </Box>
   );
 }
+
 
 export default function ProfilePage({ token, user, onReschedule, onEditAvailability, onManageBlockedDates }) {
   const roleLabel = user.role === "professional" ? "Professional" : "Member";
