@@ -93,9 +93,9 @@ function BlockedDatesPage({ token, user, onBack }) {
         onClick={onBack}
         sx={{
           alignSelf: "flex-start",
-          color: "var(--color-primary-deep)",
-          borderColor: "var(--color-primary-deep)",
-          "&:hover": { borderColor: "var(--color-primary-deep-hover)", bgcolor: "var(--color-primary-tint)" },
+          color: "primary.main",
+          borderColor: "primary.main",
+          "&:hover": { borderColor: "primary.dark", bgcolor: "action.hover" },
         }}
       >
         Back to profile

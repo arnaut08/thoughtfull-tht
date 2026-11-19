@@ -244,7 +244,7 @@ function AvailabilityPage({ token, user, onBack }) {
           "&:hover": { borderColor: "primary.dark", bgcolor: "action.hover" },
         }}
       >
-        Back to dashboard
+        Back to profile
       </Button>
 
       <Box>
