@@ -8,6 +8,10 @@ export function saveAvailability(token, rules) {
   return request("/availability", { token, method: "PUT", body: { rules } });
 }
 
+export function saveBookingNotice(token, hours) {
+  return request("/availability/booking-notice", { token, method: "PUT", body: { hours } });
+}
+
 export function blockDate(token, date, resolution) {
   return request("/availability/blocked-dates", { token, method: "POST", body: { date, resolution } });
 }
