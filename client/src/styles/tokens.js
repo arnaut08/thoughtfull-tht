@@ -3,6 +3,9 @@ export const tokens = {
   primaryHover: '#1c3d47',   // verify visually; alt #022a63
   accent: '#00bfa2',
   onAccent: '#131313',
+  onPrimary: '#ffffff',
+  primaryDeep: '#13595e',
+  primaryDeepHover: '#0e474b',
   bg: '#ffffff',
   surface: '#e3f1f4',
   text: '#131313',

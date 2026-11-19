@@ -7,7 +7,7 @@ const headings = { fontFamily: t.fontHeading, fontWeight: 700, lineHeight: 1.2 }
 
 export const theme = createTheme({
   palette: {
-    primary: { main: t.primary, dark: t.primaryHover, contrastText: '#fff' },
+    primary: { main: t.primary, dark: t.primaryHover, contrastText: t.onPrimary },
     secondary: { main: t.accent, contrastText: t.onAccent },
     surface: { main: t.surface },
     background: { default: t.bg, paper: t.bg },

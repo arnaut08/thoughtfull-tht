@@ -262,7 +262,7 @@ function SessionConflictDialog({ token, timezone, date, sessions, onBlocked, onC
               variant="contained"
               onClick={openReschedule}
               disabled={busy}
-              sx={{ bgcolor: "#13595e", "&:hover": { bgcolor: "#0e474b" } }}
+              sx={{ bgcolor: "var(--color-primary-deep)", "&:hover": { bgcolor: "var(--color-primary-deep-hover)" } }}
             >
               Reschedule sessions
             </Button>
@@ -276,7 +276,7 @@ function SessionConflictDialog({ token, timezone, date, sessions, onBlocked, onC
               variant="contained"
               onClick={moveSessionsAndBlock}
               disabled={busy || !allChosen || remaining.length === 0}
-              sx={{ bgcolor: "#13595e", "&:hover": { bgcolor: "#0e474b" } }}
+              sx={{ bgcolor: "var(--color-primary-deep)", "&:hover": { bgcolor: "var(--color-primary-deep-hover)" } }}
             >
               {busy ? "Moving sessions…" : "Move sessions and block day"}
             </Button>

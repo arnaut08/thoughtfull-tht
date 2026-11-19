@@ -46,14 +46,14 @@ function WelcomeCard({ user, onSetAvailability }) {
               width: 64,
               height: 64,
               borderRadius: "50%",
-              bgcolor: "#eff7f6",
-              color: "#13595e",
+              bgcolor: "var(--color-primary-tint)",
+              color: "var(--color-primary-deep)",
             }}
           >
             <EditCalendarOutlinedIcon sx={{ fontSize: 32 }} />
           </Box>
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="h6" component="h2" sx={{ color: "#0b3538", fontWeight: 600 }}>
+            <Typography variant="h6" component="h2" sx={{ color: "var(--color-primary-ink)", fontWeight: 600 }}>
               Welcome to Thoughtfull-THT, {firstName}!
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -68,8 +68,8 @@ function WelcomeCard({ user, onSetAvailability }) {
             sx={{
               whiteSpace: "nowrap",
               px: 2,
-              bgcolor: "#13595e",
-              "&:hover": { bgcolor: "#0e474b" },
+              bgcolor: "var(--color-primary-deep)",
+              "&:hover": { bgcolor: "var(--color-primary-deep-hover)" },
             }}
           >
             Set your availability

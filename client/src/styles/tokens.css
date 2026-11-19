@@ -17,6 +17,21 @@
   --color-footer-bg: #00bfa2;
   --color-footer-text: #131313;
 
+  /* Deep teal, used for solid buttons and welcome/icon accents on white */
+  --color-primary-deep: #13595e;
+  --color-primary-deep-hover: #0e474b;
+  --color-primary-ink: #0b3538;
+  --color-primary-tint: #eff7f6;
+
+  /* Blocked dates on the calendar */
+  --color-neutral-soft: #e7e5e4;
+  --color-neutral-strong: #78716c;
+
+  /* Member card avatar and secondary text */
+  --color-peach: #fde8da;
+  --color-peach-ink: #a4552a;
+  --color-slate: #64748b;
+
   /* Status (not extracted; chosen for AA on white) */
   --color-success: #0b7a4b;
   --color-success-bg: #e4f5ec;

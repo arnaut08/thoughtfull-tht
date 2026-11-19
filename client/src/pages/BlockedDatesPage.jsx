@@ -37,8 +37,8 @@ function BlockedDatesPage({ token, user, onBack }) {
   const blockedEvents = useMemo(
     () =>
       blockedDates.flatMap((date) => [
-        { start: date, allDay: true, display: "background", color: "#e7e5e4" },
-        { start: date, allDay: true, title: "Blocked", color: "#78716c", textColor: "#ffffff" },
+        { start: date, allDay: true, display: "background", color: "var(--color-neutral-soft)" },
+        { start: date, allDay: true, title: "Blocked", color: "var(--color-neutral-strong)", textColor: "var(--color-on-primary)" },
       ]),
     [blockedDates],
   );
@@ -93,9 +93,9 @@ function BlockedDatesPage({ token, user, onBack }) {
         onClick={onBack}
         sx={{
           alignSelf: "flex-start",
-          color: "#13595e",
-          borderColor: "#13595e",
-          "&:hover": { borderColor: "#0e474b", bgcolor: "#eff7f6" },
+          color: "var(--color-primary-deep)",
+          borderColor: "var(--color-primary-deep)",
+          "&:hover": { borderColor: "var(--color-primary-deep-hover)", bgcolor: "var(--color-primary-tint)" },
         }}
       >
         Back to profile
