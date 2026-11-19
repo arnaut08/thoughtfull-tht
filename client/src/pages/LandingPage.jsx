@@ -6,40 +6,43 @@ import SearchIcon from "@mui/icons-material/Search";
 const HIGHLIGHTS = [
   {
     icon: SearchIcon,
-    title: "Find the right fit",
-    text: "Browse professionals by what they offer and read profiles before you book.",
-  },
-  {
-    icon: PublicIcon,
-    title: "Stay in your timezone",
-    text: "Every time is shown in your own zone, so nobody has to do the maths.",
+    title: "Members: find the right fit",
+    text: "Browse professionals, read their profiles, and book a slot that suits you.",
   },
   {
     icon: EventRepeatIcon,
-    title: "Rebook in a few clicks",
-    text: "Reschedule or cancel a session without starting the conversation over.",
+    title: "Professionals: set your hours once",
+    text: "Publish weekly hours that repeat, block off dates, and see every booking in one place.",
+  },
+  {
+    icon: PublicIcon,
+    title: "Everyone: stay in your timezone",
+    text: "Every time is shown in your own zone, so nobody has to do the maths.",
   },
 ];
 
 export default function LandingPage({ onFindProfessional, onLogin }) {
   return (
-    <Box>
-      <Box sx={{ py: "var(--section-pad-marketing)", px: "var(--gutter)" }}>
+    <Box sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      <Box sx={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", py: "var(--section-pad-marketing)", px: "var(--gutter)" }}>
         <Stack spacing={3} sx={{ maxWidth: 720, mx: "auto", textAlign: "center", alignItems: "center" }}>
-          <Typography variant="h1" component="h1">
-            Booking time with people who know your work
+          <Typography variant="h1" component="h1" sx={{ textWrap: "balance" }}>
+            Book time with the right people, from either side of the call
           </Typography>
           <Typography variant="h6" component="p" color="text.secondary" sx={{ fontWeight: 400 }}>
-            Pick a professional, choose a slot that suits you both, and keep every session in one place.
+            Members find a professional and pick a slot. Professionals set their weekly hours and manage every session in one place.
           </Typography>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ pt: 1 }}>
             <Button variant="contained" size="large" onClick={onFindProfessional}>
-              Find a professional
+              Get started
             </Button>
             <Button variant="outlined" size="large" onClick={onLogin}>
               Log in
             </Button>
           </Stack>
+          <Typography variant="body2" color="text.secondary">
+            Offering sessions yourself? Choose Professional when you sign up.
+          </Typography>
         </Stack>
       </Box>
 

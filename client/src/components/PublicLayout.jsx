@@ -20,7 +20,7 @@ export default function PublicLayout({ onHome, onLogin, onSignup, children }) {
           </Button>
         </Toolbar>
       </AppBar>
-      <Box component="main" sx={{ flex: 1 }}>
+      <Box component="main" sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {children}
       </Box>
       <AppFooter />
