@@ -1,0 +1,132 @@
+import { useEffect, useMemo, useState } from "react";
+import FullCalendar from "@fullcalendar/react";
+import dayGridPlugin from "@fullcalendar/daygrid";
+import interactionPlugin from "@fullcalendar/interaction";
+import { Alert, Box, Button, Card, CardContent, Skeleton, Stack, Typography } from "@mui/material";
+import { blockDate, fetchAvailability, unblockDate } from "../api/availability.js";
+
+function BlockedDatesPage({ token, user, onBack }) {
+  const [blockedDates, setBlockedDates] = useState([]);
+  const [timezone, setTimezone] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [updating, setUpdating] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    fetchAvailability(token)
+      .then((data) => {
+        if (!active) return;
+        setTimezone(data.timezone);
+        setBlockedDates(data.blocked_dates);
+      })
+      .catch((error) => active && setLoadError(error.message))
+      .finally(() => active && setLoading(false));
+    return () => {
+      active = false;
+    };
+  }, [token]);
+
+  const blockedSet = useMemo(() => new Set(blockedDates), [blockedDates]);
+
+  // Each blocked date gets a shaded background and a label. Dates are YYYY-MM-DD, so the calendar renders them in UTC to match.
+  const blockedEvents = useMemo(
+    () =>
+      blockedDates.flatMap((date) => [
+        { start: date, allDay: true, display: "background", color: "#e7e5e4" },
+        { start: date, allDay: true, title: "Blocked", color: "#78716c", textColor: "#ffffff" },
+      ]),
+    [blockedDates],
+  );
+
+  async function handleDayClick({ dateStr }) {
+    if (updating) return;
+    setUpdating(true);
+    setMessage(null);
+    try {
+      const data = blockedSet.has(dateStr)
+        ? await unblockDate(token, dateStr)
+        : await blockDate(token, dateStr);
+      setBlockedDates(data.blocked_dates);
+    } catch (error) {
+      setMessage({ severity: "error", text: error.message });
+    } finally {
+      setUpdating(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <Stack spacing={2} aria-busy="true" aria-live="polite">
+        <Skeleton variant="rounded" width={180} height={36} sx={{ alignSelf: "flex-start" }} />
+        <Skeleton variant="text" sx={{ fontSize: "1.5rem", width: 200 }} />
+        <Card>
+          <CardContent>
+            <Skeleton variant="rounded" height={480} />
+          </CardContent>
+        </Card>
+      </Stack>
+    );
+  }
+
+  if (loadError) {
+    return <Alert severity="error">{loadError}</Alert>;
+  }
+
+  return (
+    <Stack spacing={2}>
+      <Button
+        variant="outlined"
+        onClick={onBack}
+        sx={{
+          alignSelf: "flex-start",
+          color: "#13595e",
+          borderColor: "#13595e",
+          "&:hover": { borderColor: "#0e474b", bgcolor: "#eff7f6" },
+        }}
+      >
+        Back to profile
+      </Button>
+
+      <Box>
+        <Typography variant="h5" component="h1">
+          Blocked dates
+        </Typography>
+        <Typography color="text.secondary">
+          {user.name} · Dates are in {timezone}
+        </Typography>
+      </Box>
+
+      <Alert severity="info">
+        Click a day to block it, or click a blocked day to unblock it. A blocked day has no open
+        slots. Sessions already booked on that day are kept.
+      </Alert>
+
+      {message && (
+        <Alert severity={message.severity} onClose={() => setMessage(null)}>
+          {message.text}
+        </Alert>
+      )}
+
+      <Card>
+        <CardContent>
+          <FullCalendar
+            className="session-calendar"
+            plugins={[dayGridPlugin, interactionPlugin]}
+            initialView="dayGridMonth"
+            headerToolbar={{ left: "prev,next today", center: "title", right: "" }}
+            timeZone="UTC"
+            firstDay={0}
+            height="auto"
+            events={blockedEvents}
+            dateClick={handleDayClick}
+            eventClick={({ event }) => handleDayClick({ dateStr: event.startStr })}
+          />
+        </CardContent>
+      </Card>
+    </Stack>
+  );
+}
+
+export default BlockedDatesPage;

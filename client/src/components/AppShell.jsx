@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Box, Container } from "@mui/material";
 import AppHeader from "./AppHeader.jsx";
 import AvailabilityPage from "../pages/AvailabilityPage.jsx";
+import BlockedDatesPage from "../pages/BlockedDatesPage.jsx";
 import MemberDashboardPage from "../pages/MemberDashboardPage.jsx";
 import ProfessionalDashboardPage from "../pages/ProfessionalDashboardPage.jsx";
 import ProfessionalProfilePage from "../pages/ProfessionalProfilePage.jsx";
@@ -20,6 +21,8 @@ export default function AppShell({ token, user, onSignOut }) {
           <ProfilePage
             token={token}
             user={user}
+            onEditAvailability={() => setView({ page: "availability" })}
+            onManageBlockedDates={() => setView({ page: "blockedDates" })}
             onReschedule={(session) =>
               setView({
                 page: "professional",
@@ -30,7 +33,21 @@ export default function AppShell({ token, user, onSignOut }) {
           />
         );
       case "availability":
-        return <AvailabilityPage token={token} user={user} onBack={goHome} />;
+        return (
+          <AvailabilityPage
+            token={token}
+            user={user}
+            onBack={() => setView({ page: "profile" })}
+          />
+        );
+      case "blockedDates":
+        return (
+          <BlockedDatesPage
+            token={token}
+            user={user}
+            onBack={() => setView({ page: "profile" })}
+          />
+        );
       case "professional":
         return view.rescheduleBookingId ? (
           <ProfessionalProfilePage
