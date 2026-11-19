@@ -1,0 +1,22 @@
+export const tokens = {
+  primary: '#02367e',
+  primaryHover: '#1c3d47',   // verify visually; alt #022a63
+  accent: '#00bfa2',
+  onAccent: '#131313',
+  bg: '#ffffff',
+  surface: '#e3f1f4',
+  text: '#131313',
+  muted: '#5c5c5c',
+  border: '#d4e4e8',
+  inputBorder: '#7b8b90',
+  success: '#0b7a4b',
+  successBg: '#e4f5ec',
+  warning: '#8a5a00',
+  warningBg: '#fff4d6',
+  danger: '#b3261e',
+  dangerBg: '#fdeceb',
+  fontHeading: '"Plus Jakarta Sans Variable", "Plus Jakarta Sans", system-ui, sans-serif',
+  fontBody: '"Open Sans", system-ui, sans-serif',
+  radiusButton: 100,
+  radiusCard: 8,
+};

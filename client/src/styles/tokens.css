@@ -1,0 +1,61 @@
+:root {
+  /* Brand */
+  --color-primary: #02367e;
+  --color-primary-hover: #1c3d47;      /* verify visually; alt: #022a63 */
+  --color-accent: #00bfa2;             /* backgrounds/decoration only, never text on white */
+  --color-on-primary: #ffffff;
+  --color-on-accent: #131313;          /* dark text on teal: ~7.9:1 */
+
+  /* Neutrals */
+  --color-bg: #ffffff;
+  --color-surface: #e3f1f4;
+  --color-text: #131313;
+  --color-muted: #5c5c5c;
+  --color-border: #d4e4e8;
+
+  /* Footer */
+  --color-footer-bg: #00bfa2;
+  --color-footer-text: #131313;
+
+  /* Status (not extracted; chosen for AA on white) */
+  --color-success: #0b7a4b;
+  --color-success-bg: #e4f5ec;
+  --color-warning: #8a5a00;
+  --color-warning-bg: #fff4d6;
+  --color-danger: #b3261e;
+  --color-danger-bg: #fdeceb;
+  --color-info-bg: var(--color-surface);
+
+  /* Selected / focus */
+  --color-focus: #02367e;
+  --focus-ring: 0 0 0 3px #fff, 0 0 0 5px var(--color-focus);
+
+  /* Type */
+  --font-heading: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-body: "Open Sans", system-ui, sans-serif;
+  --text-xs: 0.8125rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: clamp(2rem, 4vw, 3rem);   /* hero */
+  --leading-body: 1.6;
+  --leading-heading: 1.2;
+
+  /* Shape */
+  --radius-button: 100px;
+  --radius-card: 8px;
+  --radius-input: 8px;
+  --shadow-card: 0 1px 2px rgb(19 19 19 / 6%), 0 4px 12px rgb(19 19 19 / 6%);
+
+  /* Layout */
+  --max-width: 1200px;
+  --gutter: 24px;
+  --section-pad-marketing: clamp(56px, 8vw, 110px);  /* landing only */
+  --section-pad-app: 32px;                            /* inside the app */
+
+  /* Spacing scale */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px;
+  --space-4: 16px; --space-5: 24px; --space-6: 32px; --space-7: 48px;
+}

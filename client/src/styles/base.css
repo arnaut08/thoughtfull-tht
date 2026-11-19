@@ -1,0 +1,17 @@
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+}
+h1, h2, h3, h4 {
+  font-family: var(--font-heading);
+  line-height: var(--leading-heading);
+  margin: 0 0 var(--space-3);
+}
+a { color: var(--color-primary); }
+:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.container { max-width: var(--max-width); margin-inline: auto; padding-inline: var(--gutter); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
