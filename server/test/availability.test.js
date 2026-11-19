@@ -9,6 +9,7 @@ const users = [];
 const availabilityRows = [];
 const bookingRows = [];
 const notificationRows = [];
+const blockedDateRows = [];
 let rejectNextBooking = false;
 let rejectNextBookingWith = "slot_unavailable";
 const tables = {
@@ -16,6 +17,7 @@ const tables = {
   availability_rules: availabilityRows,
   bookings: bookingRows,
   notifications: notificationRows,
+  blocked_dates: blockedDateRows,
 };
 
 const OPERATORS = {
@@ -31,6 +33,7 @@ function fakeQuery(table) {
   const filters = [];
   let deleting = false;
   let updates = null;
+  let upserts = null;
   let countOnly = false;
   const sorts = [];
   let limit = null;
@@ -52,6 +55,10 @@ function fakeQuery(table) {
       updates = values;
       return builder;
     },
+    upsert: (values) => {
+      upserts = values;
+      return builder;
+    },
     delete: () => {
       deleting = true;
       return builder;
@@ -62,6 +69,9 @@ function fakeQuery(table) {
       for (const sort of [...sorts].reverse()) {
         const direction = sort.ascending ? 1 : -1;
         rows = [...rows].sort((a, b) => (a[sort.column] < b[sort.column] ? -1 : a[sort.column] > b[sort.column] ? 1 : 0) * direction);
+      }
+      if (upserts && !table.some((row) => Object.entries(upserts).every(([key, value]) => row[key] === value))) {
+        table.push({ id: randomUUID(), ...upserts });
       }
       if (deleting) {
         rows.forEach((row) => table.splice(table.indexOf(row), 1));
@@ -224,6 +234,7 @@ beforeEach(() => {
   availabilityRows.length = 0;
   bookingRows.length = 0;
   notificationRows.length = 0;
+  blockedDateRows.length = 0;
   rejectNextBooking = false;
   rejectNextBookingWith = "slot_unavailable";
 });
@@ -645,7 +656,43 @@ describe("/api/availability", () => {
     expect(put.status).toBe(200);
     expect(put.body.rules).toEqual(expected);
     expect(get.status).toBe(200);
-    expect(get.body).toEqual({ timezone: "Asia/Kolkata", rules: expected });
+    expect(get.body).toEqual({ timezone: "Asia/Kolkata", rules: expected, blocked_dates: [] });
+  });
+
+  test("blocks and unblocks calendar dates, returning them sorted and without duplicates", async () => {
+    const { token } = addUser("professional");
+    const block = (date) =>
+      request(app).post("/api/availability/blocked-dates").set("Authorization", `Bearer ${token}`).send({ date });
+
+    const first = await block("2026-12-25");
+    await block("2026-12-24");
+    const duplicate = await block("2026-12-24");
+    const removed = await request(app)
+      .delete("/api/availability/blocked-dates/2026-12-25")
+      .set("Authorization", `Bearer ${token}`);
+    const get = await request(app).get("/api/availability").set("Authorization", `Bearer ${token}`);
+
+    expect(first.status).toBe(201);
+    expect(first.body.blocked_dates).toEqual(["2026-12-25"]);
+    expect(duplicate.body.blocked_dates).toEqual(["2026-12-24", "2026-12-25"]);
+    expect(removed.body.blocked_dates).toEqual(["2026-12-24"]);
+    expect(get.body.blocked_dates).toEqual(["2026-12-24"]);
+  });
+
+  test("returns 400 for a date that is not a real YYYY-MM-DD calendar date", async () => {
+    const { token } = addUser("professional");
+
+    const badFormat = await request(app)
+      .post("/api/availability/blocked-dates")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ date: "2026-12-25T00:00" });
+    const impossible = await request(app)
+      .delete("/api/availability/blocked-dates/2026-02-30")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(badFormat.status).toBe(400);
+    expect(impossible.status).toBe(400);
+    expect(blockedDateRows).toHaveLength(0);
   });
 });
 
@@ -687,6 +734,22 @@ describe("generateOpenSlots", () => {
     expect(slots.length).toBeGreaterThan(0);
     expect(slots.every((slot) => slot.start >= now && slot.end <= horizonEnd)).toBe(true);
     expect(slots.some((slot) => slot.start < booked[0].end && slot.end > booked[0].start)).toBe(false);
+  });
+
+  test("skips every session on a blocked date in the professional's timezone, not UTC", () => {
+    // 00:30 IST on 1 Mar is still 28 Feb in UTC, so the blocked date must be matched in the professional's zone.
+    const now = DateTime.fromISO("2026-02-28T00:00:00Z");
+    const slots = generateOpenSlots({
+      rules: [rule(0, "00:30", "02:00")],
+      timezone: "Asia/Kolkata",
+      now,
+      horizonEnd: now.plus({ days: 14 }),
+      blockedDates: ["2026-03-01"],
+    });
+
+    const localDates = slots.map((slot) => slot.start.setZone("Asia/Kolkata").toISODate());
+    expect(localDates).not.toContain("2026-03-01");
+    expect(localDates).toContain("2026-03-08");
   });
 });
 
@@ -756,6 +819,23 @@ describe("/api/professionals", () => {
     expect(starts).not.toContain(bookedStart.toMillis());
     expect(starts).toContain(bookedStart.plus({ minutes: 50 }).toMillis());
     expect(response.body.slots.every((slot) => /-0[45]:00$/.test(slot.start))).toBe(true);
+  });
+
+  test("offers no slots on a date the professional has blocked", async () => {
+    const { token } = addUser("member", "America/New_York");
+    const { user: professional } = addUser("professional", "Asia/Kolkata");
+    scheduleEveryDay(professional.id);
+    const blocked = DateTime.now().setZone("Asia/Kolkata").plus({ days: 2 }).toISODate();
+    blockedDateRows.push({ id: randomUUID(), professional_id: professional.id, blocked_date: blocked });
+
+    const response = await request(app)
+      .get(`/api/professionals/${professional.id}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    const localDates = response.body.slots.map((slot) => DateTime.fromISO(slot.start).setZone("Asia/Kolkata").toISODate());
+    expect(response.status).toBe(200);
+    expect(localDates).not.toContain(blocked);
+    expect(localDates).toContain(DateTime.fromISO(blocked).plus({ days: 1 }).toISODate());
   });
 
   describe("POST /:id/bookings", () => {
