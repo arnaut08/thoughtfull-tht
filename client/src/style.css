@@ -173,6 +173,22 @@ h1 {
   color: #ffffff !important;
 }
 
+/* Blocked dates cover the availability hours with a peach chip, so the day reads as unavailable. */
+.session-calendar .fc-event.session-blocked {
+  background-color: #fde8da; /* peach-100 */
+  color: #a4552a; /* peach-700 */
+  border: 1px dashed #f0a06b;
+  border-radius: 999px;
+  box-shadow: none;
+  text-align: center;
+}
+
+.session-calendar .fc-event.session-blocked .fc-event-main {
+  color: #a4552a;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
 /* Open slots are greyed out with muted text and a dashed outline. */
 .session-calendar .fc-event.session-open {
   background-color: #f1f0ee !important;

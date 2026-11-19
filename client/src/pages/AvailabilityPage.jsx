@@ -112,6 +112,7 @@ function AvailabilityPage({ token, user, onBack }) {
   const draftRules = useMemo(() => sortRules(events.map(eventToRule)), [events]);
   const isDirty = JSON.stringify(draftRules) !== JSON.stringify(sortRules(savedRules));
 
+
   function warn(text) {
     setMessage({ severity: "warning", text });
   }
@@ -149,6 +150,7 @@ function AvailabilityPage({ token, user, onBack }) {
     setMessage(null);
     setEvents(savedRules.map(ruleToEvent));
   }
+
 
   async function handleSave() {
     const rules = draftRules;
