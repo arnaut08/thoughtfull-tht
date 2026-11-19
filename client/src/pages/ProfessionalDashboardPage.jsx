@@ -421,7 +421,7 @@ export default function ProfessionalDashboardPage({ token, user, onEditAvailabil
         <Typography color="text.secondary">Signed in as {user.name}</Typography>
       </Box>
       {content}
-      {schedule?.rules.length > 0 && (
+      {(schedule ? schedule.rules.length > 0 : !loadError) && (
         <UpcomingSessionsCard
           bookings={bookings}
           blockedDates={schedule?.blocked_dates ?? []}

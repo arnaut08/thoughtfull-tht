@@ -16,6 +16,7 @@ import {
   ListItemText,
   MenuItem,
   Select,
+  Skeleton,
   Stack,
   Typography,
 } from "@mui/material";
@@ -159,7 +160,14 @@ function SessionConflictDialog({ token, timezone, date, sessions, onBlocked, onC
             </Typography>
           )}
 
-          {mode === "reschedule" && (
+          {mode === "reschedule" && !suggestionsLoaded && busy && (
+            <Stack spacing={1.5} aria-busy="true">
+              <Skeleton variant="rounded" height={64} />
+              <Skeleton variant="rounded" height={64} />
+            </Stack>
+          )}
+
+          {mode === "reschedule" && suggestionsLoaded && (
             <Stack spacing={1.5}>
               {remaining.map((session) => {
                 const chosen = choices[session.id];

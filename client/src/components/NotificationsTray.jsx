@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Box, Drawer, IconButton, List, ListItem, ListItemText, Stack, Typography } from "@mui/material";
+import { Box, Drawer, IconButton, List, ListItem, ListItemText, Skeleton, Stack, Typography } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import { fetchNotifications, markNotificationsRead } from "../api/notifications.js";
@@ -34,13 +34,14 @@ function formatRelativeTime(iso, timezone) {
 }
 
 export default function NotificationsTray({ open, token, timezone, onClose, onMarkedRead }) {
-  const [notifications, setNotifications] = useState([]);
+  const [notifications, setNotifications] = useState(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!open) return undefined;
     let active = true;
     setError("");
+    setNotifications(null);
     fetchNotifications(token)
       .then(async (data) => {
         if (!active) return;
@@ -81,14 +82,22 @@ export default function NotificationsTray({ open, token, timezone, onClose, onMa
         </Typography>
       )}
 
-      {!error && notifications.length === 0 ? (
+      {!error && notifications === null && (
+        <Stack spacing={1.5} sx={{ p: 2 }} aria-busy="true">
+          <Skeleton variant="rounded" height={64} />
+          <Skeleton variant="rounded" height={64} />
+          <Skeleton variant="rounded" height={64} />
+        </Stack>
+      )}
+
+      {!error && notifications?.length === 0 ? (
         <Box sx={{ flex: 1, display: "grid", placeItems: "center", p: 3 }}>
           <Stack spacing={1} sx={{ alignItems: "center" }}>
             <NotificationsNoneIcon sx={{ fontSize: 48, color: "text.disabled" }} />
             <Typography color="text.secondary">You're all caught up.</Typography>
           </Stack>
         </Box>
-      ) : (
+      ) : notifications?.length > 0 && (
         <List disablePadding>
           {notifications.map((notification) => (
             <ListItem
