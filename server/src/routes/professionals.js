@@ -6,7 +6,7 @@ import { toApiRule } from "../lib/availability.js";
 import { isBeyondNotice, noticeClosedMessage } from "../lib/cancellation.js";
 import { SLOT_HORIZON_DAYS, generateOpenSlots } from "../lib/slots.js";
 import { getBookingForMember } from "../services/bookings.js";
-import { getRulesForProfessional } from "../services/availability.js";
+import { getBlockedDatesForProfessional, getRulesForProfessional } from "../services/availability.js";
 import {
   bookSession,
   getMemberBookingsOverlapping,
@@ -40,14 +40,16 @@ async function findMemberBookingWithProfessional(bookingId, member, professional
 // excludeBookingId is the session being rescheduled, so it doesn't block its own time.
 export async function loadOpenSlots(professional, member, now, excludeBookingId) {
   const horizonEnd = now.plus({ days: SLOT_HORIZON_DAYS });
-  const [rows, professionalBookings, memberBookings] = await Promise.all([
+  const [rows, blockedDates, professionalBookings, memberBookings] = await Promise.all([
     getRulesForProfessional(professional.id),
+    getBlockedDatesForProfessional(professional.id),
     getProfessionalBookingsOverlapping(professional.id, now, horizonEnd),
     getMemberBookingsOverlapping(member.id, now, horizonEnd),
   ]);
 
   return generateOpenSlots({
     rules: rows.map(toApiRule),
+    blockedDates,
     timezone: professional.timezone,
     now,
     horizonEnd,

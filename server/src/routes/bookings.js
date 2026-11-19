@@ -6,7 +6,7 @@ import { requireProfessional } from "../middleware/requireProfessional.js";
 import { toApiRule } from "../lib/availability.js";
 import { isBeyondNotice, noticeClosedMessage, noticeCutoff } from "../lib/cancellation.js";
 import { SLOT_HORIZON_DAYS, generateOpenSlots } from "../lib/slots.js";
-import { getRulesForProfessional } from "../services/availability.js";
+import { getBlockedDatesForProfessional, getRulesForProfessional } from "../services/availability.js";
 import {
   getBookingForMember,
   getBookingForProfessional,
@@ -109,8 +109,9 @@ professionalBookingsRouter.get("/", async (request, response) => {
 
   const now = DateTime.utc();
   const horizonEnd = now.plus({ days: SLOT_HORIZON_DAYS });
-  const [rules, bookings] = await Promise.all([
+  const [rules, blockedDates, bookings] = await Promise.all([
     getRulesForProfessional(professional.id),
+    getBlockedDatesForProfessional(professional.id),
     getProfessionalBookingsOverlapping(professional.id, now, horizonEnd),
   ]);
   const members = new Map(
@@ -126,6 +127,7 @@ professionalBookingsRouter.get("/", async (request, response) => {
   });
   const openSlots = generateOpenSlots({
     rules: rules.map(toApiRule),
+    blockedDates,
     timezone: professional.timezone,
     now,
     horizonEnd,

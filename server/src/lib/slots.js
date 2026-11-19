@@ -26,13 +26,16 @@ function localInstant(day, minutes, zone) {
 // Expands a professional's weekly local-time windows into back-to-back sessions within
 // [now, horizonEnd), skipping any session that overlaps a booking.
 // rules: [{ day_of_week, start_time, end_time }] in HH:mm; booked: [{ start, end }] as DateTimes.
-export function generateOpenSlots({ rules, timezone, now, horizonEnd, booked = [] }) {
+// blockedDates: YYYY-MM-DD dates in the professional's timezone that have no slots at all.
+export function generateOpenSlots({ rules, timezone, now, horizonEnd, booked = [], blockedDates = [] }) {
   const sessionLength = { minutes: SESSION_MINUTES };
+  const blocked = new Set(blockedDates);
   const firstDay = now.setZone(timezone).startOf("day").minus({ days: 1 });
   const lastDay = horizonEnd.setZone(timezone).startOf("day").plus({ days: 1 });
   const slots = [];
 
   for (let day = firstDay; day <= lastDay; day = day.plus({ days: 1 })) {
+    if (blocked.has(day.toISODate())) continue;
     const weekday = day.weekday % 7; // Luxon: 1 = Monday ... 7 = Sunday. Ours: 0 = Sunday.
     const dayRules = rules.filter((rule) => rule.day_of_week === weekday);
 
