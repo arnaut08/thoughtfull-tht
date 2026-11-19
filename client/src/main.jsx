@@ -4,7 +4,6 @@ import { CssBaseline, ThemeProvider } from "@mui/material";
 import App from "./App.jsx";
 import { theme } from "./theme.js";
 import "@fontsource-variable/plus-jakarta-sans";
-import "@fontsource/open-sans";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/fullCalendar.css";

@@ -16,7 +16,7 @@ export const tokens = {
   danger: '#b3261e',
   dangerBg: '#fdeceb',
   fontHeading: '"Plus Jakarta Sans Variable", "Plus Jakarta Sans", system-ui, sans-serif',
-  fontBody: '"Open Sans", system-ui, sans-serif',
+  fontBody: '"Plus Jakarta Sans Variable", "Plus Jakarta Sans", system-ui, sans-serif',
   radiusButton: 100,
   radiusCard: 8,
 };
