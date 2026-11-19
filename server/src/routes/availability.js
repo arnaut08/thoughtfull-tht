@@ -16,13 +16,14 @@ import {
   getMemberBookingsOverlapping,
   getProfessionalBookingsOverlapping,
 } from "../services/professionals.js";
-import { findUserById, findUsersByIds } from "../services/users.js";
+import { findUserById, findUsersByIds, setBookingNotice } from "../services/users.js";
 
 export const availabilityRouter = Router();
 
 availabilityRouter.use(requireAuth, requireProfessional);
 
 const RESOLUTIONS = new Set(["keep", "cancel"]);
+const MAX_BOOKING_NOTICE_HOURS = 168;
 
 // Returns a YYYY-MM-DD string for a real calendar date, or null.
 function parseDate(value) {
@@ -67,9 +68,23 @@ availabilityRouter.get("/", async (request, response) => {
   }
   response.json({
     timezone: user.timezone,
+    min_booking_notice_hours: user.min_booking_notice_hours,
     rules: rows.map(toApiRule),
     blocked_dates: blockedDates,
   });
+});
+
+// Sets how many whole hours ahead members must book. Applies to new bookings and to member reschedules.
+availabilityRouter.put("/booking-notice", async (request, response) => {
+  const hours = request.body?.hours;
+  if (!Number.isInteger(hours) || hours < 0 || hours > MAX_BOOKING_NOTICE_HOURS) {
+    return response
+      .status(400)
+      .json({ error: `hours must be a whole number from 0 to ${MAX_BOOKING_NOTICE_HOURS}` });
+  }
+
+  await setBookingNotice(request.user.id, hours);
+  response.json({ min_booking_notice_hours: hours });
 });
 
 // Blocks a whole day. If the day already has sessions, nothing is blocked unless the professional chooses:

@@ -53,6 +53,7 @@ export async function loadOpenSlots(professional, member, now, excludeBookingId)
     timezone: professional.timezone,
     now,
     horizonEnd,
+    minNoticeHours: professional.min_booking_notice_hours,
     booked: [...professionalBookings, ...memberBookings]
       .filter((booking) => !excludeBookingId || booking.id !== excludeBookingId)
       .map((booking) => ({
@@ -106,6 +107,7 @@ professionalsRouter.get("/:id", async (request, response) => {
 
   response.json({
     professional: toProfessionalSummary(professional),
+    min_booking_notice_hours: professional.min_booking_notice_hours,
     timezone: member.timezone,
     reschedule,
     slots: slots.map(({ start, end }) => ({
