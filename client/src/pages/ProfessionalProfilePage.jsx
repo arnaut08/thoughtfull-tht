@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
-import listPlugin from "@fullcalendar/list";
+import dayGridPlugin from "@fullcalendar/daygrid";
 import {
   Alert,
   Box,
   Button,
   Card,
   CardContent,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Skeleton,
   Stack,
   Typography,
@@ -85,7 +89,7 @@ export default function ProfessionalProfilePage({
     };
   }, [token, professionalId, rescheduleBookingId]);
 
-  // Clicking a slot only selects it; the member confirms in the panel below the calendar.
+  // Clicking a slot only selects it; the member confirms in a dialog.
   function handleEventClick(info) {
     if (info.event.id === profile.reschedule?.start) return;
     const slot = profile.slots.find((candidate) => candidate.start === info.event.id);
@@ -132,9 +136,9 @@ export default function ProfessionalProfilePage({
     }
   }
 
-  // The session being rescheduled is offered as open by the server, but it is shown as current and can't be picked.
-  // The list's time column is hidden, so the range goes in the title. A session that runs past midnight is capped
-  // at midnight, so the list shows it once, on its start day, and its end includes the date.
+  // Each open session is one chip on its start day, showing only its range. A session that runs past midnight is
+  // capped at midnight, so it appears once. The chip for the session being rescheduled is marked current, and the
+  // chip the member picked is marked selected until they confirm or cancel.
   const events = useMemo(() => {
     if (!profile) return [];
     const clock = new Intl.DateTimeFormat("en-US", {
@@ -142,36 +146,26 @@ export default function ProfessionalProfilePage({
       hour: "numeric",
       minute: "2-digit",
     });
-    const dateClock = new Intl.DateTimeFormat("en-US", {
-      timeZone: memberTimezone,
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
     return profile.slots.map((slot) => {
       const isCurrent = slot.start === profile.reschedule?.start;
-      const startInstant = new Date(slot.start);
-      const endInstant = new Date(slot.end);
-      const start = toWallClockDate(startInstant, memberTimezone);
-      let end = toWallClockDate(endInstant, memberTimezone);
+      const isSelected = slot.start === selectedSlot?.start;
+      const start = toWallClockDate(new Date(slot.start), memberTimezone);
       const midnight = new Date(start);
       midnight.setUTCHours(24, 0, 0, 0);
-      const endsPastMidnight = end > midnight;
-      if (endsPastMidnight) end = midnight;
-      const range = `${clock.format(startInstant)} – ${
-        endsPastMidnight ? dateClock.format(endInstant) : clock.format(endInstant)
-      }`;
+      const end = new Date(Math.min(toWallClockDate(new Date(slot.end), memberTimezone), midnight));
+      const range = `${clock.format(new Date(slot.start))} – ${clock.format(new Date(slot.end))}`;
+      const classNames = [];
+      if (isCurrent) classNames.push("current-session");
+      if (isSelected) classNames.push("slot-selected");
       return {
         id: slot.start,
         title: isCurrent ? `Current · ${range}` : range,
-        classNames: isCurrent ? ["current-session"] : [],
+        classNames,
         start,
         end,
       };
     });
-  }, [profile, memberTimezone]);
+  }, [profile, memberTimezone, selectedSlot]);
 
   const today = toWallClockDate(new Date(), memberTimezone).toISOString().slice(0, 10);
 
@@ -236,26 +230,6 @@ export default function ProfessionalProfilePage({
             <Typography color="text.secondary">No open sessions in the next 4 weeks.</Typography>
           )}
 
-          <Card>
-            <CardContent>
-              <FullCalendar
-                plugins={[listPlugin]}
-                initialView="listWeek"
-                initialDate={today}
-                headerToolbar={{ left: "prev,next today", center: "title", right: "" }}
-                buttonText={{ today: "Today" }}
-                timeZone="UTC"
-                listDayFormat={{ weekday: "long", month: "short", day: "numeric" }}
-                listDaySideFormat={false}
-                displayEventTime={false}
-                noEventsContent="No open sessions this week"
-                height="auto"
-                events={events}
-                eventClick={handleEventClick}
-              />
-            </CardContent>
-          </Card>
-
           {confirmation?.kind === "booking" && (
             <Alert severity="success">
               Booked with {confirmation.booking.professional.name} on{" "}
@@ -271,34 +245,59 @@ export default function ProfessionalProfilePage({
           )}
           {bookError && <Alert severity="error">{bookError}</Alert>}
 
-          {selectedSlot && (
-            <Card>
-              <CardContent>
-                <Stack spacing={2}>
-                  <Typography>
-                    {rescheduleBookingId ? "New session" : "Selected session"}:{" "}
-                    <strong>
-                      {formatSlotRange(selectedSlot.start, selectedSlot.end, memberTimezone)}
-                    </strong>
-                  </Typography>
-                  <Stack direction="row" spacing={1}>
-                    <Button variant="contained" onClick={handleConfirm} disabled={booking}>
-                      {booking
-                        ? rescheduleBookingId
-                          ? "Rescheduling…"
-                          : "Booking…"
-                        : rescheduleBookingId
-                          ? "Confirm reschedule"
-                          : "Confirm booking"}
-                    </Button>
-                    <Button onClick={() => setSelectedSlot(null)} disabled={booking}>
-                      Cancel
-                    </Button>
-                  </Stack>
-                </Stack>
-              </CardContent>
-            </Card>
-          )}
+          <Card>
+            <CardContent>
+              <div className="session-calendar">
+                <FullCalendar
+                  plugins={[dayGridPlugin]}
+                  initialView="dayGridWeek"
+                  initialDate={today}
+                  headerToolbar={{ left: "prev,next today", center: "title", right: "" }}
+                  buttonText={{ today: "Today" }}
+                  timeZone="UTC"
+                  firstDay={0}
+                  dayHeaderFormat={{ weekday: "short", month: "short", day: "numeric" }}
+                  displayEventTime={false}
+                  eventDisplay="block"
+                  height="auto"
+                  events={events}
+                  eventClick={handleEventClick}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Dialog
+            open={Boolean(selectedSlot)}
+            onClose={() => !booking && setSelectedSlot(null)}
+            aria-labelledby="confirm-session-title"
+          >
+            <DialogTitle id="confirm-session-title">
+              {rescheduleBookingId ? "Confirm reschedule" : "Confirm booking"}
+            </DialogTitle>
+            <DialogContent>
+              <Typography>
+                {rescheduleBookingId ? "New session" : "Session"}:{" "}
+                <strong>
+                  {selectedSlot && formatSlotRange(selectedSlot.start, selectedSlot.end, memberTimezone)}
+                </strong>
+              </Typography>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setSelectedSlot(null)} disabled={booking}>
+                Cancel
+              </Button>
+              <Button variant="contained" onClick={handleConfirm} disabled={booking}>
+                {booking
+                  ? rescheduleBookingId
+                    ? "Rescheduling…"
+                    : "Booking…"
+                  : rescheduleBookingId
+                    ? "Confirm reschedule"
+                    : "Confirm booking"}
+              </Button>
+            </DialogActions>
+          </Dialog>
         </>
       )}
     </Stack>
