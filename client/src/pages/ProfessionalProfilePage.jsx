@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
-import timeGridPlugin from "@fullcalendar/timegrid";
+import listPlugin from "@fullcalendar/list";
 import {
   Alert,
   Box,
@@ -133,22 +133,45 @@ export default function ProfessionalProfilePage({
   }
 
   // The session being rescheduled is offered as open by the server, but it is shown as current and can't be picked.
-  const events = useMemo(
-    () =>
-      profile
-        ? profile.slots.map((slot) => {
-            const isCurrent = slot.start === profile.reschedule?.start;
-            return {
-              id: slot.start,
-              title: isCurrent ? "Current" : "Open",
-              classNames: isCurrent ? ["current-session"] : [],
-              start: toWallClockDate(new Date(slot.start), memberTimezone),
-              end: toWallClockDate(new Date(slot.end), memberTimezone),
-            };
-          })
-        : [],
-    [profile, memberTimezone],
-  );
+  // The list's time column is hidden, so the range goes in the title. A session that runs past midnight is capped
+  // at midnight, so the list shows it once, on its start day, and its end includes the date.
+  const events = useMemo(() => {
+    if (!profile) return [];
+    const clock = new Intl.DateTimeFormat("en-US", {
+      timeZone: memberTimezone,
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    const dateClock = new Intl.DateTimeFormat("en-US", {
+      timeZone: memberTimezone,
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    return profile.slots.map((slot) => {
+      const isCurrent = slot.start === profile.reschedule?.start;
+      const startInstant = new Date(slot.start);
+      const endInstant = new Date(slot.end);
+      const start = toWallClockDate(startInstant, memberTimezone);
+      let end = toWallClockDate(endInstant, memberTimezone);
+      const midnight = new Date(start);
+      midnight.setUTCHours(24, 0, 0, 0);
+      const endsPastMidnight = end > midnight;
+      if (endsPastMidnight) end = midnight;
+      const range = `${clock.format(startInstant)} – ${
+        endsPastMidnight ? dateClock.format(endInstant) : clock.format(endInstant)
+      }`;
+      return {
+        id: slot.start,
+        title: isCurrent ? `Current · ${range}` : range,
+        classNames: isCurrent ? ["current-session"] : [],
+        start,
+        end,
+      };
+    });
+  }, [profile, memberTimezone]);
 
   const today = toWallClockDate(new Date(), memberTimezone).toISOString().slice(0, 10);
 
@@ -216,21 +239,18 @@ export default function ProfessionalProfilePage({
           <Card>
             <CardContent>
               <FullCalendar
-                plugins={[timeGridPlugin]}
-                initialView="timeGridWeek"
+                plugins={[listPlugin]}
+                initialView="listWeek"
                 initialDate={today}
                 headerToolbar={{ left: "prev,next today", center: "title", right: "" }}
                 buttonText={{ today: "Today" }}
                 timeZone="UTC"
-                firstDay={0}
-                dayHeaderFormat={{ weekday: "short", month: "short", day: "numeric" }}
-                allDaySlot={false}
-                slotDuration="00:30:00"
-                slotMinTime="00:00:00"
-                slotMaxTime="24:00:00"
+                listDayFormat={{ weekday: "long", month: "short", day: "numeric" }}
+                listDaySideFormat={false}
+                displayEventTime={false}
+                noEventsContent="No open sessions this week"
                 height="auto"
                 events={events}
-                eventDisplay="block"
                 eventClick={handleEventClick}
               />
             </CardContent>

@@ -93,7 +93,8 @@ h1 {
 }
 
 /* The member's session being rescheduled, shown in the booking calendar. Scoped under .fc so it outranks FullCalendar's event styles. */
-.fc .fc-event.current-session {
+.fc .fc-event.current-session,
+.fc .fc-list-event.current-session td {
   background-color: #f59e0b;
   border: 2px solid #b45309;
   color: #451a03;
