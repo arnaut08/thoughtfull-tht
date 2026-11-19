@@ -10,21 +10,21 @@ body {
 
 /* Softens FullCalendar's default chrome to match the dashboard's cards. */
 .session-calendar {
-  --fc-border-color: #f1f5f9; /* slate-100 */
+  --fc-border-color: var(--color-border);
   --fc-page-bg-color: transparent;
-  --fc-neutral-text-color: #78716c;
-  --fc-today-bg-color: #fdeee3; /* soft peach */
-  --fc-now-indicator-color: #f0a06b;
-  --fc-event-bg-color: #cfe9e5; /* soft teal */
+  --fc-neutral-text-color: var(--color-muted);
+  --fc-today-bg-color: var(--color-surface);
+  --fc-now-indicator-color: var(--color-primary);
+  --fc-event-bg-color: var(--color-accent);
   --fc-event-border-color: transparent;
-  --fc-event-text-color: #0b3538;
+  --fc-event-text-color: var(--color-on-accent);
 }
 
 /* Grid: subtle slate-100 cell lines, no outer frame. */
 .session-calendar .fc-theme-standard td,
 .session-calendar .fc-theme-standard th,
 .session-calendar .fc-theme-standard .fc-scrollgrid {
-  border-color: #f1f5f9;
+  border-color: var(--color-border);
 }
 
 .session-calendar .fc-theme-standard .fc-scrollgrid {
@@ -35,11 +35,11 @@ body {
 
 /* The member's session being rescheduled, and the slot picked for confirmation, in the booking calendar. Scoped under .fc and marked !important so they outrank the global event colours. */
 .fc .fc-event.current-session {
-  background-color: #f59e0b !important;
-  border: 2px solid #b45309 !important;
-  color: #451a03 !important;
+  background-color: var(--color-accent) !important;
+  border: 2px solid var(--color-primary) !important;
+  color: var(--color-on-accent) !important;
   font-weight: 700;
-  box-shadow: 0 0 0 2px #fde68a;
+  box-shadow: 0 0 0 2px var(--color-surface);
 }
 
 
@@ -48,9 +48,9 @@ body {
   border: 0;
   border-radius: 0.75rem;
   background-image: none;
-  background-color: #eff7f6; /* brand-50 */
+  background-color: var(--color-surface);
   box-shadow: none;
-  color: #0e474b; /* brand-800 */
+  color: var(--color-primary);
   font-weight: 500;
   text-transform: capitalize;
   transition: background-color 150ms ease, color 150ms ease;
@@ -66,26 +66,26 @@ body {
 
 .session-calendar .fc-toolbar .fc-button:hover,
 .session-calendar .fc-toolbar .fc-button:focus-visible {
-  background-color: #d7ece9; /* brand-100 */
-  color: #0b3538;
+  background-color: var(--color-border);
+  color: var(--color-primary);
   box-shadow: none;
 }
 
 .session-calendar .fc-toolbar .fc-today-button {
-  background-color: #fde8da; /* peach-100 */
-  color: #a4552a; /* peach-700 */
+  background-color: var(--color-surface);
+  color: var(--color-primary);
 }
 
 .session-calendar .fc-toolbar .fc-today-button:hover,
 .session-calendar .fc-toolbar .fc-today-button:focus-visible {
-  background-color: #fbd3b8;
-  color: #a4552a;
+  background-color: var(--color-border);
+  color: var(--color-primary);
 }
 
 .session-calendar .fc-toolbar .fc-button-active,
 .session-calendar .fc-toolbar .fc-button:not(:disabled):active {
-  background-color: #13595e; /* brand-700 */
-  color: #ffffff;
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
   box-shadow: none;
 }
 
@@ -97,50 +97,61 @@ body {
 .session-calendar .fc-event {
   border: 0;
   border-radius: 8px;
-  box-shadow: 0 4px 14px rgb(11 53 56 / 0.08);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--color-text) 8%, transparent);
   font-weight: 500;
 }
 
 .session-calendar .fc-timegrid-event .fc-event-main {
-  padding: 0.25rem 0.5rem;
+  padding: 0.125rem 0.375rem;
+  line-height: 1.25;
+}
+
+.session-calendar .fc-event-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.session-calendar .fc-event-time {
+  font-size: 0.7rem;
+  font-weight: 500;
 }
 
 /* Booked sessions are solid teal with white text so they stand out from open slots. */
 .session-calendar .fc-event.session-booked {
-  background-color: #0f766e !important;
-  color: #ffffff !important;
+  background-color: var(--color-accent) !important;
+  color: var(--color-on-accent) !important;
 }
 
 .session-calendar .fc-event.session-booked .fc-event-main {
-  color: #ffffff !important;
+  color: var(--color-on-accent) !important;
 }
 
 /* Blocked dates cover the availability hours with a peach chip, so the day reads as unavailable. */
 .session-calendar .fc-event.session-blocked {
-  background-color: #fde8da; /* peach-100 */
-  color: #a4552a; /* peach-700 */
-  border: 1px dashed #f0a06b;
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px dashed var(--color-warning);
   border-radius: 999px;
   box-shadow: none;
   text-align: center;
 }
 
 .session-calendar .fc-event.session-blocked .fc-event-main {
-  color: #a4552a;
+  color: var(--color-warning);
   font-size: 0.75rem;
   font-weight: 600;
 }
 
 /* Open slots are greyed out with muted text and a dashed outline. */
 .session-calendar .fc-event.session-open {
-  background-color: #f1f0ee !important;
+  background-color: var(--color-surface) !important;
   box-shadow: none;
-  outline: 1px dashed #c4bfb9;
+  outline: 1px dashed var(--color-muted);
   outline-offset: -1px;
 }
 
 .session-calendar .fc-event.session-open .fc-event-main {
-  color: #8a837c !important;
+  color: var(--color-muted) !important;
   font-weight: 400;
 }
 
@@ -148,7 +159,7 @@ body {
 
 /* Primary buttons: soft teal, no border, pill shape. */
 .fc .fc-button-primary {
-  background-color: #d7ece9 !important;
+  background-color: var(--color-surface) !important;
   border: none !important;
   border-radius: 9999px !important;
 }
@@ -157,18 +168,18 @@ body {
 .fc .fc-theme-standard td,
 .fc .fc-theme-standard th,
 .fc .fc-scrollgrid {
-  border-color: #f1f5f9 !important;
+  border-color: var(--color-border) !important;
 }
 
 /* Today highlight: very transparent soft peach. */
 .fc .fc-day-today {
-  background-color: rgb(253 232 218 / 0.35) !important;
+  background-color: color-mix(in srgb, var(--color-surface) 35%, transparent) !important;
 }
 
 /* Events: soft teal, no border, 8px radius. */
 .fc .fc-v-event,
 .fc .fc-event {
-  background-color: #cfe9e5 !important;
+  background-color: var(--color-accent) !important;
   border: none !important;
   border-radius: 8px !important;
 }
@@ -176,13 +187,13 @@ body {
 /* Text contrast: dark slate on pastel backgrounds. */
 .fc .fc-button-primary,
 .fc .fc-button-primary svg {
-  color: #0f172a !important;
+  color: var(--color-text) !important;
   fill: currentColor;
 }
 
 .fc .fc-event,
 .fc .fc-v-event,
 .fc .fc-event-main {
-  color: #0f172a !important;
+  color: var(--color-text) !important;
   font-weight: 600;
 }
