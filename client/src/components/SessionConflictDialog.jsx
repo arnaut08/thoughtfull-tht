@@ -3,6 +3,7 @@ import {
   Alert,
   Box,
   Button,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -18,6 +19,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CloseIcon from "@mui/icons-material/Close";
 import { blockDate, fetchRescheduleSuggestions } from "../api/availability.js";
 import { fetchProfessionalBookings, rescheduleProfessionalBooking } from "../api/bookings.js";
@@ -26,7 +28,9 @@ import { formatSessionDate, formatSessionTime } from "../lib/schedule.js";
 // Shown when a professional blocks a date that already has sessions. Each choice ends with the day blocked.
 function SessionConflictDialog({ token, timezone, date, sessions, onBlocked, onClose }) {
   const [mode, setMode] = useState("choose");
-  const [remaining, setRemaining] = useState(sessions);
+  const [remaining] = useState(sessions);
+  const [movedIds, setMovedIds] = useState([]);
+  const [movingId, setMovingId] = useState(null);
   const [openSlots, setOpenSlots] = useState(null);
   const [choices, setChoices] = useState({});
   const [editingId, setEditingId] = useState(null);
@@ -74,19 +78,25 @@ function SessionConflictDialog({ token, timezone, date, sessions, onBlocked, onC
     }
   }
 
-  // Moves sessions one at a time. If one fails, the sessions already moved stay moved and the rest remain listed.
+  // Moves sessions one at a time. Moved rows stay listed with a check mark. If one fails, the rows already moved
+  // keep their check marks and the rest can be retried.
   async function moveSessionsAndBlock() {
     setBusy(true);
     setError("");
+    setEditingId(null);
     try {
       for (const session of remaining) {
+        if (movedIds.includes(session.id)) continue;
+        setMovingId(session.id);
         await rescheduleProfessionalBooking(token, session.id, choices[session.id]);
-        setRemaining((current) => current.filter((item) => item.id !== session.id));
+        setMovedIds((current) => [...current, session.id]);
       }
+      setMovingId(null);
       const data = await blockDate(token, date);
       onBlocked(data.blocked_dates);
     } catch (err) {
-      setError(`${err.message}. Sessions moved so far are updated; choose again for the rest.`);
+      setMovingId(null);
+      setError(`${err.message}. Sessions already moved are checked off; choose again for the rest.`);
       setBusy(false);
     }
   }
@@ -153,26 +163,38 @@ function SessionConflictDialog({ token, timezone, date, sessions, onBlocked, onC
             <Stack spacing={1.5}>
               {remaining.map((session) => {
                 const chosen = choices[session.id];
+                const moved = movedIds.includes(session.id);
                 return (
-                  <Box key={session.id} sx={{ border: 1, borderColor: "divider", borderRadius: 1, p: 1.5 }}>
+                  <Box
+                    key={session.id}
+                    sx={{ border: 1, borderColor: moved ? "success.main" : "divider", borderRadius: 1, p: 1.5 }}
+                  >
                     <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between" }}>
                       <Box sx={{ minWidth: 0 }}>
                         <Typography variant="body2">
                           {formatSessionTime(session.start, timezone)} – {formatSessionTime(session.end, timezone)} with{" "}
                           {session.member?.name ?? "member"}
                         </Typography>
-                        <Typography variant="body2" color={chosen ? "text.secondary" : "error"}>
-                          {chosen
-                            ? `Moves to ${formatSessionDate(chosen, timezone)} · ${formatSessionTime(chosen, timezone)}`
-                            : "No new time yet. Choose one."}
+                        <Typography variant="body2" color={moved ? "success.main" : chosen ? "text.secondary" : "error"}>
+                          {moved
+                            ? `Moved to ${formatSessionDate(chosen, timezone)} · ${formatSessionTime(chosen, timezone)}`
+                            : chosen
+                              ? `Moves to ${formatSessionDate(chosen, timezone)} · ${formatSessionTime(chosen, timezone)}`
+                              : "No new time yet. Choose one."}
                         </Typography>
                       </Box>
-                      <Button size="small" onClick={() => startEditing(session)} disabled={busy || !openSlots}>
-                        Change
-                      </Button>
+                      {moved ? (
+                        <CheckCircleIcon color="success" aria-label="Moved" />
+                      ) : movingId === session.id ? (
+                        <CircularProgress size={20} aria-label="Moving" />
+                      ) : (
+                        <Button size="small" onClick={() => startEditing(session)} disabled={busy || !openSlots}>
+                          Change
+                        </Button>
+                      )}
                     </Stack>
 
-                    {editingId === session.id && (
+                    {editingId === session.id && !moved && (
                       <Stack direction="row" spacing={1} sx={{ mt: 1.5, flexWrap: "wrap", alignItems: "center" }}>
                         <FormControl size="small" sx={{ minWidth: 180 }}>
                           <InputLabel id={`day-${session.id}`}>Day</InputLabel>
@@ -248,7 +270,7 @@ function SessionConflictDialog({ token, timezone, date, sessions, onBlocked, onC
               disabled={busy || !allChosen || remaining.length === 0}
               sx={{ bgcolor: "#13595e", "&:hover": { bgcolor: "#0e474b" } }}
             >
-              Move sessions and block day
+              {busy ? "Moving sessions…" : "Move sessions and block day"}
             </Button>
           </>
         )}
