@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Box, Container } from "@mui/material";
+import AppFooter from "./AppFooter.jsx";
 import AppHeader from "./AppHeader.jsx";
 import AvailabilityPage from "../pages/AvailabilityPage.jsx";
 import BlockedDatesPage from "../pages/BlockedDatesPage.jsx";
@@ -88,17 +89,19 @@ export default function AppShell({ token, user, onSignOut }) {
   }
 
   return (
-    <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
+    <Box sx={{ minHeight: "100vh", display: "flex", flexDirection: "column", bgcolor: "background.default" }}>
       <AppHeader
         token={token}
         user={user}
+        activePage={view.page}
         onHome={goHome}
         onProfile={() => setView({ page: "profile" })}
         onSignOut={onSignOut}
       />
-      <Container component="main" maxWidth="lg" sx={{ py: 3 }}>
+      <Container component="main" maxWidth="lg" sx={{ py: 3, flexGrow: 1 }}>
         {renderPage()}
       </Container>
+      <AppFooter />
     </Box>
   );
 }
