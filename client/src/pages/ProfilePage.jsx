@@ -96,7 +96,7 @@ function SessionGroup({ title, sessions, timezone, emptyText, onCancel, onResche
   );
 }
 
-export default function ProfilePage({ token, user, onReschedule }) {
+export default function ProfilePage({ token, user, onReschedule, onEditAvailability, onManageBlockedDates }) {
   const roleLabel = user.role === "professional" ? "Professional" : "Member";
   const isMember = user.role === "member";
   const [bookings, setBookings] = useState(null);
@@ -154,6 +154,41 @@ export default function ProfilePage({ token, user, onReschedule }) {
           </Stack>
         </CardContent>
       </Card>
+
+      {!isMember && (
+        <Card>
+          <CardContent sx={{ p: 3 }}>
+            <Typography variant="h6" component="h2">
+              Availability
+            </Typography>
+            <Stack spacing={2} sx={{ mt: 2 }}>
+              <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between" }}>
+                <Box>
+                  <Typography fontWeight={500}>Weekly hours</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    The times you're available each week.
+                  </Typography>
+                </Box>
+                <Button variant="outlined" onClick={onEditAvailability}>
+                  Edit weekly hours
+                </Button>
+              </Stack>
+              <Divider />
+              <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between" }}>
+                <Box>
+                  <Typography fontWeight={500}>Blocked dates</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Specific days with no open slots, such as holidays or time off.
+                  </Typography>
+                </Box>
+                <Button variant="outlined" onClick={onManageBlockedDates}>
+                  Manage blocked dates
+                </Button>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
 
       {isMember && (
         <Card>
