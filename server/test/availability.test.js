@@ -694,6 +694,182 @@ describe("/api/availability", () => {
     expect(impossible.status).toBe(400);
     expect(blockedDateRows).toHaveLength(0);
   });
+
+  describe("blocking a date that has sessions", () => {
+    function bookSessionOn(professional, member, startsAt) {
+      const booking = {
+        id: randomUUID(),
+        professional_id: professional.id,
+        member_id: member.id,
+        starts_at: DateTime.fromISO(startsAt).toUTC().toISO(),
+        ends_at: DateTime.fromISO(startsAt).plus({ minutes: 50 }).toUTC().toISO(),
+      };
+      bookingRows.push(booking);
+      return booking;
+    }
+    const block = (token, body) =>
+      request(app).post("/api/availability/blocked-dates").set("Authorization", `Bearer ${token}`).send(body);
+
+    test("returns 409 listing the day's sessions and blocks nothing without a resolution", async () => {
+      const { user: professional, token } = addUser("professional");
+      const { user: member } = addUser("member");
+      const booking = bookSessionOn(professional, member, "2026-12-25T10:00:00+05:30");
+
+      const response = await block(token, { date: "2026-12-25" });
+
+      expect(response.status).toBe(409);
+      expect(response.body.details.sessions).toEqual([
+        expect.objectContaining({ id: booking.id, member: { id: member.id, name: "member" } }),
+      ]);
+      expect(blockedDateRows).toHaveLength(0);
+      expect(bookingRows).toHaveLength(1);
+    });
+
+    test("with keep, blocks the day and leaves the sessions booked", async () => {
+      const { user: professional, token } = addUser("professional");
+      const { user: member } = addUser("member");
+      bookSessionOn(professional, member, "2026-12-25T10:00:00+05:30");
+
+      const response = await block(token, { date: "2026-12-25", resolution: "keep" });
+
+      expect(response.status).toBe(201);
+      expect(response.body.blocked_dates).toEqual(["2026-12-25"]);
+      expect(bookingRows).toHaveLength(1);
+      expect(notificationRows).toHaveLength(0);
+    });
+
+    test("with cancel, cancels every session on the day, notifies each member, then blocks the day", async () => {
+      const { user: professional, token } = addUser("professional");
+      const { user: member } = addUser("member");
+      const { user: other } = addUser("member");
+      bookSessionOn(professional, member, "2026-12-25T10:00:00+05:30");
+      bookSessionOn(professional, other, "2026-12-25T15:00:00+05:30");
+
+      const response = await block(token, { date: "2026-12-25", resolution: "cancel" });
+
+      expect(response.status).toBe(201);
+      expect(response.body.blocked_dates).toEqual(["2026-12-25"]);
+      expect(bookingRows).toHaveLength(0);
+      expect(notificationRows.map((row) => row.recipient_id).sort()).toEqual([member.id, other.id].sort());
+    });
+
+    test("uses the professional's timezone: a session at 00:30 IST is not on the previous UTC day", async () => {
+      const { user: professional, token } = addUser("professional");
+      const { user: member } = addUser("member");
+      bookSessionOn(professional, member, "2026-12-25T00:30:00+05:30");
+
+      const previousDay = await block(token, { date: "2026-12-24" });
+      const sessionDay = await block(token, { date: "2026-12-25" });
+
+      expect(previousDay.status).toBe(201);
+      expect(sessionDay.status).toBe(409);
+    });
+
+    test("returns 400 for an unknown resolution and writes nothing", async () => {
+      const { user: professional, token } = addUser("professional");
+      const { user: member } = addUser("member");
+      bookSessionOn(professional, member, "2026-12-25T10:00:00+05:30");
+
+      const response = await block(token, { date: "2026-12-25", resolution: "reschedule" });
+
+      expect(response.status).toBe(400);
+      expect(bookingRows).toHaveLength(1);
+      expect(blockedDateRows).toHaveLength(0);
+    });
+
+    describe("reschedule suggestions", () => {
+      const localDay = (offset) => DateTime.now().setZone("Asia/Kolkata").startOf("day").plus({ days: offset }).toISODate();
+      const at = (day, time) => `${day}T${time}:00+05:30`;
+      const everyDay = [0, 1, 2, 3, 4, 5, 6].map((day_of_week) => ({
+        day_of_week,
+        start_time: "09:00",
+        end_time: "12:00",
+      }));
+      const suggest = (token, date) =>
+        request(app).get(`/api/availability/reschedule-suggestions?date=${date}`).set("Authorization", `Bearer ${token}`);
+      const suggestedStart = (body, sessionId) =>
+        DateTime.fromISO(body.sessions.find((session) => session.id === sessionId).suggested.start)
+          .setZone("Asia/Kolkata")
+          .toISO({ suppressMilliseconds: true });
+
+      test("suggests the same local time on the next day with room", async () => {
+        const { user: professional, token } = addUser("professional");
+        const { user: member } = addUser("member");
+        await request(app).put("/api/availability").set("Authorization", `Bearer ${token}`).send({ rules: everyDay });
+        const day = localDay(3);
+        const booking = bookSessionOn(professional, member, at(day, "09:00"));
+
+        const response = await suggest(token, day);
+
+        expect(response.status).toBe(200);
+        expect(response.body.sessions).toEqual([
+          expect.objectContaining({ id: booking.id, suggested: expect.any(Object) }),
+        ]);
+        expect(suggestedStart(response.body, booking.id)).toBe(at(localDay(4), "09:00"));
+      });
+
+      test("skips later days that are blocked", async () => {
+        const { user: professional, token } = addUser("professional");
+        const { user: member } = addUser("member");
+        await request(app).put("/api/availability").set("Authorization", `Bearer ${token}`).send({ rules: everyDay });
+        await block(token, { date: localDay(4) });
+        const day = localDay(3);
+        const booking = bookSessionOn(professional, member, at(day, "09:00"));
+
+        const response = await suggest(token, day);
+
+        expect(suggestedStart(response.body, booking.id)).toBe(at(localDay(5), "09:00"));
+      });
+
+      test("avoids a slot the member already has with another professional", async () => {
+        const { user: professional, token } = addUser("professional");
+        const { user: other } = addUser("professional");
+        const { user: member } = addUser("member");
+        await request(app).put("/api/availability").set("Authorization", `Bearer ${token}`).send({ rules: everyDay });
+        const day = localDay(3);
+        const booking = bookSessionOn(professional, member, at(day, "09:00"));
+        bookSessionOn(other, member, at(localDay(4), "09:00"));
+
+        const response = await suggest(token, day);
+
+        expect(suggestedStart(response.body, booking.id)).toBe(at(localDay(5), "09:00"));
+      });
+
+      test("never suggests the same slot for two sessions", async () => {
+        const { user: professional, token } = addUser("professional");
+        const { user: first } = addUser("member");
+        const { user: second } = addUser("member");
+        await request(app).put("/api/availability").set("Authorization", `Bearer ${token}`).send({ rules: everyDay });
+        const day = localDay(3);
+        const a = bookSessionOn(professional, first, at(day, "09:00"));
+        const b = bookSessionOn(professional, second, at(day, "10:00"));
+
+        const response = await suggest(token, day);
+
+        expect(suggestedStart(response.body, a.id)).toBe(at(localDay(4), "09:00"));
+        expect(suggestedStart(response.body, b.id)).toBe(at(localDay(4), "09:50"));
+      });
+
+      test("returns a null suggestion when no open slot exists", async () => {
+        const { user: professional, token } = addUser("professional");
+        const { user: member } = addUser("member");
+        const day = localDay(3);
+        const booking = bookSessionOn(professional, member, at(day, "09:00"));
+
+        const response = await suggest(token, day);
+
+        expect(response.body.sessions).toEqual([expect.objectContaining({ id: booking.id, suggested: null })]);
+      });
+
+      test("returns 400 for an invalid date", async () => {
+        const { token } = addUser("professional");
+
+        const response = await suggest(token, "2026-02-30");
+
+        expect(response.status).toBe(400);
+      });
+    });
+  });
 });
 
 describe("generateOpenSlots", () => {
