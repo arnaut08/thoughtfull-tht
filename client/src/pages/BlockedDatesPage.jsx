@@ -4,6 +4,7 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import { Alert, Box, Button, Card, CardContent, Skeleton, Stack, Typography } from "@mui/material";
 import { blockDate, fetchAvailability, unblockDate } from "../api/availability.js";
+import SessionConflictDialog from "../components/SessionConflictDialog.jsx";
 
 function BlockedDatesPage({ token, user, onBack }) {
   const [blockedDates, setBlockedDates] = useState([]);
@@ -12,6 +13,7 @@ function BlockedDatesPage({ token, user, onBack }) {
   const [loadError, setLoadError] = useState("");
   const [updating, setUpdating] = useState(false);
   const [message, setMessage] = useState(null);
+  const [conflict, setConflict] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -50,10 +52,19 @@ function BlockedDatesPage({ token, user, onBack }) {
         : await blockDate(token, dateStr);
       setBlockedDates(data.blocked_dates);
     } catch (error) {
-      setMessage({ severity: "error", text: error.message });
+      if (error.details?.sessions) {
+        setConflict({ date: dateStr, sessions: error.details.sessions });
+      } else {
+        setMessage({ severity: "error", text: error.message });
+      }
     } finally {
       setUpdating(false);
     }
+  }
+
+  function handleBlocked(dates) {
+    setBlockedDates(dates);
+    setConflict(null);
   }
 
   if (loading) {
@@ -100,13 +111,26 @@ function BlockedDatesPage({ token, user, onBack }) {
 
       <Alert severity="info">
         Click a day to block it, or click a blocked day to unblock it. A blocked day has no open
-        slots. Sessions already booked on that day are kept.
+        slots. If a day already has booked sessions, you'll choose whether to keep them, cancel them,
+        or reschedule them before the day is blocked.
       </Alert>
 
       {message && (
         <Alert severity={message.severity} onClose={() => setMessage(null)}>
           {message.text}
         </Alert>
+      )}
+
+      {conflict && (
+        <SessionConflictDialog
+          key={conflict.date}
+          token={token}
+          timezone={timezone}
+          date={conflict.date}
+          sessions={conflict.sessions}
+          onBlocked={handleBlocked}
+          onClose={() => setConflict(null)}
+        />
       )}
 
       <Card>
