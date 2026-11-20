@@ -1,25 +1,18 @@
 import { Router } from "express";
 import { DateTime } from "luxon";
 import { requireAuth } from "../middleware/requireAuth.js";
-import { requireMember } from "../middleware/requireMember.js";
-import { requireProfessional } from "../middleware/requireProfessional.js";
-import { toApiRule } from "../lib/availability.js";
+import { requireMember, requireProfessional } from "../middleware/requireRole.js";
 import { isBeyondNotice, noticeClosedMessage, noticeCutoff } from "../lib/cancellation.js";
-import { SLOT_HORIZON_DAYS, generateOpenSlots } from "../lib/slots.js";
-import { getBlockedDatesForProfessional, getRulesForProfessional } from "../services/availability.js";
-import {
-  getBookingForMember,
-  getBookingForProfessional,
-  getBookingsForMember,
-} from "../services/bookings.js";
-import { getProfessionalBookingsOverlapping, cancelSession, rescheduleSession } from "../services/professionals.js";
-import { findUserById, findUsersByIds } from "../services/users.js";
-import { loadOpenSlots } from "./professionals.js";
+import { SLOT_HORIZON_DAYS, bookingInterval, generateOpenSlots, toZonedInterval } from "../lib/slots.js";
+import { isUuid, parseIsoDateTime } from "../lib/validation.js";
+import { getBookingForMember, getBookingForProfessional, getBookingsForMember } from "../services/bookings.js";
+import { cancelSession, rescheduleSession } from "../services/professionals.js";
+import { findSlotAt, loadOpenSlots, loadProfessionalSchedule } from "../services/openSlots.js";
+import { findUserById, findUsersByIds, toProfessionalSummary } from "../services/users.js";
 
 export const bookingsRouter = Router();
 export const professionalBookingsRouter = Router();
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const memberConflictMessage =
   "The member already has another session that conflicts with this time, so the session can't be moved here";
 
@@ -34,25 +27,18 @@ bookingsRouter.get("/", async (request, response) => {
   }
 
   const rows = await getBookingsForMember(member.id);
-  const professionals = new Map(
-    (await findUsersByIds(rows.map((row) => row.professional_id))).map((professional) => [
-      professional.id,
-      professional,
-    ]),
-  );
+  const professionals = await findUsersByIds(rows.map((row) => row.professional_id));
 
   const now = DateTime.utc();
   const sessions = rows.map((row) => ({
     id: row.id,
     professional: professionals.get(row.professional_id),
-    start: DateTime.fromISO(row.starts_at),
-    end: DateTime.fromISO(row.ends_at),
+    ...bookingInterval(row),
   }));
   const toApiSession = ({ id, professional, start, end }) => ({
     id,
-    professional: { id: professional.id, name: professional.name, timezone: professional.timezone },
-    start: start.setZone(member.timezone).toISO(),
-    end: end.setZone(member.timezone).toISO(),
+    professional: toProfessionalSummary(professional),
+    ...toZonedInterval({ start, end }, member.timezone),
     cancellable: isBeyondNotice(start, now),
   });
 
@@ -69,7 +55,7 @@ bookingsRouter.get("/", async (request, response) => {
 // Cancels one of the member's sessions. Sessions starting within the cancellation notice window are refused with 409.
 bookingsRouter.delete("/:id", async (request, response) => {
   const bookingId = request.params.id;
-  if (!UUID_PATTERN.test(bookingId)) {
+  if (!isUuid(bookingId)) {
     return response.status(404).json({ error: "Session not found" });
   }
 
@@ -111,32 +97,19 @@ professionalBookingsRouter.get("/", async (request, response) => {
 
   const now = DateTime.utc();
   const horizonEnd = now.plus({ days: SLOT_HORIZON_DAYS });
-  const [rules, blockedDates, bookings] = await Promise.all([
-    getRulesForProfessional(professional.id),
-    getBlockedDatesForProfessional(professional.id),
-    getProfessionalBookingsOverlapping(professional.id, now, horizonEnd),
-  ]);
-  const members = new Map(
-    (await findUsersByIds(bookings.map((booking) => booking.member_id))).map((member) => [
-      member.id,
-      member,
-    ]),
-  );
+  const { rules, blockedDates, bookings } = await loadProfessionalSchedule(professional.id, now, horizonEnd);
+  const members = await findUsersByIds(bookings.map((booking) => booking.member_id));
 
-  const toInterval = (booking) => ({
-    start: DateTime.fromISO(booking.starts_at),
-    end: DateTime.fromISO(booking.ends_at),
-  });
   const openSlots = generateOpenSlots({
-    rules: rules.map(toApiRule),
+    rules,
     blockedDates,
     timezone: professional.timezone,
     now,
     horizonEnd,
-    booked: bookings.map(toInterval),
+    booked: bookings.map(bookingInterval),
   }).map((slot) => ({ ...slot, id: null, member: null }));
   const bookedSessions = bookings.map((booking) => ({
-    ...toInterval(booking),
+    ...bookingInterval(booking),
     id: booking.id,
     member: members.get(booking.member_id),
   }));
@@ -145,8 +118,7 @@ professionalBookingsRouter.get("/", async (request, response) => {
     .sort((a, b) => a.start.toMillis() - b.start.toMillis())
     .map(({ id, start, end, member }) => ({
       id,
-      start: start.setZone(professional.timezone).toISO(),
-      end: end.setZone(professional.timezone).toISO(),
+      ...toZonedInterval({ start, end }, professional.timezone),
       member: member ? { id: member.id, name: member.name } : null,
     }));
 
@@ -156,7 +128,7 @@ professionalBookingsRouter.get("/", async (request, response) => {
 // Cancels one of the professional's sessions. Unlike members, professionals have no 24-hour notice limit.
 professionalBookingsRouter.delete("/:id", async (request, response) => {
   const bookingId = request.params.id;
-  if (!UUID_PATTERN.test(bookingId)) {
+  if (!isUuid(bookingId)) {
     return response.status(404).json({ error: "Session not found" });
   }
 
@@ -186,14 +158,13 @@ professionalBookingsRouter.delete("/:id", async (request, response) => {
 // Moves one of the professional's sessions to an open slot. The move is a single atomic update, so the member
 // keeps a session throughout. The slot must be free for both the professional and the member.
 professionalBookingsRouter.post("/:id/reschedule", async (request, response) => {
-  const startsAtInput = request.body?.starts_at;
-  const startsAt = typeof startsAtInput === "string" ? DateTime.fromISO(startsAtInput) : null;
-  if (!startsAt?.isValid) {
+  const startsAt = parseIsoDateTime(request.body?.starts_at);
+  if (!startsAt) {
     return response.status(400).json({ error: "starts_at must be an ISO timestamp" });
   }
 
   const bookingId = request.params.id;
-  if (!UUID_PATTERN.test(bookingId)) {
+  if (!isUuid(bookingId)) {
     return response.status(404).json({ error: "Session not found" });
   }
 
@@ -209,15 +180,12 @@ professionalBookingsRouter.post("/:id/reschedule", async (request, response) => 
 
   const now = DateTime.utc();
   const slots = await loadOpenSlots(professional, member, now, booking.id);
-  const slot = slots.find((candidate) => candidate.start.toMillis() === startsAt.toMillis());
+  const slot = findSlotAt(slots, startsAt);
   if (!slot) {
     // Slots are hidden when the member has another session then. Check the professional's time alone to tell
     // that apart from a slot that is really taken.
     const professionalSlots = await loadOpenSlots(professional, member, now, booking.id, { checkMember: false });
-    const freeForProfessional = professionalSlots.some(
-      (candidate) => candidate.start.toMillis() === startsAt.toMillis(),
-    );
-    if (freeForProfessional) {
+    if (findSlotAt(professionalSlots, startsAt)) {
       return response.status(409).json({ error: memberConflictMessage });
     }
     return response.status(409).json({ error: "That session is no longer available" });
@@ -248,8 +216,7 @@ professionalBookingsRouter.post("/:id/reschedule", async (request, response) => 
   response.json({
     booking: {
       member: { id: member.id, name: member.name },
-      start: slot.start.setZone(professional.timezone).toISO(),
-      end: slot.end.setZone(professional.timezone).toISO(),
+      ...toZonedInterval(slot, professional.timezone),
     },
   });
 });

@@ -8,6 +8,10 @@ export class EmailTakenError extends Error {
   }
 }
 
+export function toProfessionalSummary(row) {
+  return { id: row.id, name: row.name, timezone: row.timezone };
+}
+
 // Shapes a stored row for API responses, expressing createdAt in the user's own timezone.
 export function toPublicUser(row) {
   return {
@@ -73,9 +77,10 @@ export async function findUserById(id) {
   return data;
 }
 
+// Returns a Map from id to { id, name, timezone } for the given ids. Ids with no matching user are absent.
 export async function findUsersByIds(ids) {
   const uniqueIds = [...new Set(ids)];
-  if (uniqueIds.length === 0) return [];
+  if (uniqueIds.length === 0) return new Map();
 
   const { data, error } = await supabase
     .from("users")
@@ -83,5 +88,5 @@ export async function findUsersByIds(ids) {
     .in("id", uniqueIds);
 
   if (error) throw error;
-  return data;
+  return new Map(data.map((user) => [user.id, user]));
 }

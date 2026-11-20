@@ -1,10 +1,20 @@
 import { DateTime } from "luxon";
 import { toMinutes } from "./availability.js";
 
-export const SESSION_MINUTES = 50;
+const SESSION_MINUTES = 50;
 export const SLOT_HORIZON_DAYS = 28;
 
 const MINUTES_PER_DAY = 24 * 60;
+
+// A stored booking row as a { start, end } pair of DateTimes.
+export function bookingInterval({ starts_at, ends_at }) {
+  return { start: DateTime.fromISO(starts_at), end: DateTime.fromISO(ends_at) };
+}
+
+// Formats a { start, end } pair as ISO strings in `zone`.
+export function toZonedInterval({ start, end }, zone) {
+  return { start: start.setZone(zone).toISO(), end: end.setZone(zone).toISO() };
+}
 
 // The instant of `minutes` past local midnight on `day`, in `zone`. 1440 is the next midnight.
 function localInstant(day, minutes, zone) {
