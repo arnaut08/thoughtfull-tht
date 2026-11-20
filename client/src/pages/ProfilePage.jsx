@@ -108,7 +108,6 @@ function SessionGroup({ title, sessions, timezone, emptyText, onCancel, onResche
   );
 }
 
-
 export default function ProfilePage({ token, user, onReschedule, onEditAvailability, onManageBlockedDates }) {
   const roleLabel = user.role === "professional" ? "Professional" : "Member";
   const isMember = user.role === "member";

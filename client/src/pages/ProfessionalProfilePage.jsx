@@ -18,46 +18,13 @@ import {
 } from "@mui/material";
 import CheckIcon from "@mui/icons-material/Check";
 import TimezoneLabel from "../components/TimezoneLabel.jsx";
+import BackButton from "../components/BackButton.jsx";
+import { formatSlotRange, toWallClockDate } from "../lib/schedule.js";
 import {
   bookProfessionalSlot,
   fetchProfessionalProfile,
   rescheduleProfessionalSlot,
 } from "../api/professionals.js";
-
-// FullCalendar renders in UTC, so each instant is shifted to the wall-clock time it shows in the member's zone.
-function toWallClockDate(instant, timezone) {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    })
-      .formatToParts(instant)
-      .map((part) => [part.type, part.value]),
-  );
-  return new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute));
-}
-
-// Formats an ISO instant as a readable date and time range in the given zone.
-function formatSlotRange(start, end, timezone) {
-  const date = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-  });
-  const time = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  const startDate = new Date(start);
-  return `${date.format(startDate)}, ${time.format(startDate)} – ${time.format(new Date(end))}`;
-}
 
 // With rescheduleBookingId set, confirming moves that session instead of booking a new one.
 export default function ProfessionalProfilePage({
@@ -166,9 +133,17 @@ export default function ProfessionalProfilePage({
         end,
       };
     });
-  }, [profile, memberTimezone, selectedSlot]);
+  }, [profile, memberTimezone]);
 
   const today = toWallClockDate(new Date(), memberTimezone).toISOString().slice(0, 10);
+  const isRescheduling = Boolean(rescheduleBookingId);
+  const confirmLabel = booking
+    ? isRescheduling
+      ? "Rescheduling…"
+      : "Booking…"
+    : isRescheduling
+      ? "Confirm reschedule"
+      : "Confirm booking";
 
   // The session being rescheduled is not a free slot, so it gets no slot styling.
   const slotClassNames = ({ event }) => {
@@ -189,18 +164,9 @@ export default function ProfessionalProfilePage({
 
   return (
     <Stack spacing={2}>
-      <Button
-        variant="outlined"
-        onClick={onBack}
-        sx={{
-          alignSelf: "flex-start",
-          color: "primary.main",
-          borderColor: "primary.main",
-          "&:hover": { borderColor: "primary.dark", bgcolor: "action.hover" },
-        }}
-      >
+      <BackButton onClick={onBack}>
         {rescheduleBookingId ? "Back to my sessions" : "Back to professionals"}
-      </Button>
+      </BackButton>
 
       {!profile && !loadError && (
         <Stack spacing={2} aria-busy="true" aria-live="polite">
@@ -266,8 +232,7 @@ export default function ProfessionalProfilePage({
               <Box sx={{ mb: 2 }}>
                 <TimezoneLabel timezone={memberTimezone} />
               </Box>
-              <div className="session-calendar">
-                <CalendarShell>
+              <CalendarShell className="session-calendar">
                 <FullCalendar
                   plugins={[dayGridPlugin]}
                   initialView="dayGridWeek"
@@ -285,8 +250,7 @@ export default function ProfessionalProfilePage({
                   eventContent={renderSlot}
                   eventClick={handleEventClick}
                 />
-                </CalendarShell>
-              </div>
+              </CalendarShell>
             </CardContent>
           </Card>
 
@@ -311,13 +275,7 @@ export default function ProfessionalProfilePage({
                 Cancel
               </Button>
               <Button variant="contained" onClick={handleConfirm} disabled={booking}>
-                {booking
-                  ? rescheduleBookingId
-                    ? "Rescheduling…"
-                    : "Booking…"
-                  : rescheduleBookingId
-                    ? "Confirm reschedule"
-                    : "Confirm booking"}
+                {confirmLabel}
               </Button>
             </DialogActions>
           </Dialog>

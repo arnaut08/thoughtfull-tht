@@ -3,8 +3,9 @@ import FullCalendar from "@fullcalendar/react";
 import CalendarShell from "../components/CalendarShell.jsx";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
-import { Alert, Box, Button, Card, CardContent, Skeleton, Stack, Typography } from "@mui/material";
+import { Alert, Box, Card, CardContent, Skeleton, Stack, Typography } from "@mui/material";
 import { blockDate, fetchAvailability, unblockDate } from "../api/availability.js";
+import BackButton from "../components/BackButton.jsx";
 import SessionConflictDialog from "../components/SessionConflictDialog.jsx";
 
 function BlockedDatesPage({ token, user, onBack }) {
@@ -88,18 +89,7 @@ function BlockedDatesPage({ token, user, onBack }) {
 
   return (
     <Stack spacing={2}>
-      <Button
-        variant="outlined"
-        onClick={onBack}
-        sx={{
-          alignSelf: "flex-start",
-          color: "primary.main",
-          borderColor: "primary.main",
-          "&:hover": { borderColor: "primary.dark", bgcolor: "action.hover" },
-        }}
-      >
-        Back to profile
-      </Button>
+      <BackButton onClick={onBack}>Back to profile</BackButton>
 
       <Box>
         <Typography variant="h5" component="h1">
@@ -136,19 +126,18 @@ function BlockedDatesPage({ token, user, onBack }) {
 
       <Card>
         <CardContent>
-          <CalendarShell>
-          <FullCalendar
-            className="session-calendar"
-            plugins={[dayGridPlugin, interactionPlugin]}
-            initialView="dayGridMonth"
-            headerToolbar={{ left: "prev,next today", center: "title", right: "" }}
-            timeZone="UTC"
-            firstDay={0}
-            height="auto"
-            events={blockedEvents}
-            dateClick={handleDayClick}
-            eventClick={({ event }) => handleDayClick({ dateStr: event.startStr })}
-          />
+          <CalendarShell className="session-calendar">
+            <FullCalendar
+              plugins={[dayGridPlugin, interactionPlugin]}
+              initialView="dayGridMonth"
+              headerToolbar={{ left: "prev,next today", center: "title", right: "" }}
+              timeZone="UTC"
+              firstDay={0}
+              height="auto"
+              events={blockedEvents}
+              dateClick={handleDayClick}
+              eventClick={({ event }) => handleDayClick({ dateStr: event.startStr })}
+            />
           </CalendarShell>
         </CardContent>
       </Card>

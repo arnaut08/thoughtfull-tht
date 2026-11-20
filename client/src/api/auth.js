@@ -1,18 +1,12 @@
-const apiUrl = import.meta.env.VITE_API_URL || "/api";
+import { API_URL, parseResponse } from "./request.js";
 
 async function postJson(path, body) {
-  const response = await fetch(`${apiUrl}${path}`, {
+  const response = await fetch(`${API_URL}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw Object.assign(new Error(data.error || "Request failed"), {
-      details: data.details ?? {},
-    });
-  }
-  return data;
+  return parseResponse(response);
 }
 
 export function register(values) {
@@ -24,7 +18,7 @@ export function login(values) {
 }
 
 export async function fetchCurrentUser(token) {
-  const response = await fetch(`${apiUrl}/auth/me`, {
+  const response = await fetch(`${API_URL}/auth/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) {
