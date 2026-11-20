@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
 import CalendarShell from "../components/CalendarShell.jsx";
+import { AvailabilityPageSkeleton } from "../components/PageSkeletons.jsx";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import {
@@ -11,7 +12,6 @@ import {
   CardContent,
   Chip,
   InputAdornment,
-  Skeleton,
   Stack,
   TextField,
   Typography,
@@ -202,20 +202,7 @@ function AvailabilityPage({ token, user, onBack }) {
   }
 
   if (loading) {
-    return (
-      <Stack spacing={2} aria-busy="true" aria-live="polite">
-        <Skeleton variant="rounded" width={180} height={36} sx={{ alignSelf: "flex-start" }} />
-        <Box>
-          <Skeleton variant="text" sx={{ fontSize: "1.5rem", width: 200 }} />
-          <Skeleton variant="text" width={260} />
-        </Box>
-        <Card>
-          <CardContent>
-            <Skeleton variant="rounded" height={560} />
-          </CardContent>
-        </Card>
-      </Stack>
-    );
+    return <AvailabilityPageSkeleton />;
   }
 
   if (loadError) {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
 import CalendarShell from "../components/CalendarShell.jsx";
+import { ProfessionalProfilePageSkeleton } from "../components/PageSkeletons.jsx";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import {
   Alert,
@@ -12,7 +13,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Skeleton,
   Stack,
   Typography,
 } from "@mui/material";
@@ -168,19 +168,7 @@ export default function ProfessionalProfilePage({
         {rescheduleBookingId ? "Back to my sessions" : "Back to professionals"}
       </BackButton>
 
-      {!profile && !loadError && (
-        <Stack spacing={2} aria-busy="true" aria-live="polite">
-          <Box>
-            <Skeleton variant="text" sx={{ fontSize: "1.5rem", width: 220 }} />
-            <Skeleton variant="text" width={300} />
-          </Box>
-          <Card>
-            <CardContent>
-              <Skeleton variant="rounded" height={560} />
-            </CardContent>
-          </Card>
-        </Stack>
-      )}
+      {!profile && !loadError && <ProfessionalProfilePageSkeleton />}
       {loadError && <Alert severity="error">{loadError}</Alert>}
 
       {profile && (

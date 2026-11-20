@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
 import CalendarShell from "../components/CalendarShell.jsx";
+import { BlockedDatesPageSkeleton } from "../components/PageSkeletons.jsx";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
-import { Alert, Box, Card, CardContent, Skeleton, Stack, Typography } from "@mui/material";
+import { Alert, Box, Card, CardContent, Stack, Typography } from "@mui/material";
 import { blockDate, fetchAvailability, unblockDate } from "../api/availability.js";
 import BackButton from "../components/BackButton.jsx";
 import SessionConflictDialog from "../components/SessionConflictDialog.jsx";
@@ -70,17 +71,7 @@ function BlockedDatesPage({ token, user, onBack }) {
   }
 
   if (loading) {
-    return (
-      <Stack spacing={2} aria-busy="true" aria-live="polite">
-        <Skeleton variant="rounded" width={180} height={36} sx={{ alignSelf: "flex-start" }} />
-        <Skeleton variant="text" sx={{ fontSize: "1.5rem", width: 200 }} />
-        <Card>
-          <CardContent>
-            <Skeleton variant="rounded" height={480} />
-          </CardContent>
-        </Card>
-      </Stack>
-    );
+    return <BlockedDatesPageSkeleton />;
   }
 
   if (loadError) {

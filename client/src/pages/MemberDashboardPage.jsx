@@ -4,29 +4,13 @@ import {
   Card,
   CardActionArea,
   CardContent,
-  Skeleton,
   Stack,
   Typography,
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import { fetchProfessionals } from "../api/professionals.js";
+import { ProfessionalCardSkeleton } from "../components/PageSkeletons.jsx";
 import NameAvatar from "../components/NameAvatar.jsx";
-
-function ProfessionalCardSkeleton() {
-  return (
-    <Card sx={{ height: "100%", border: 0, boxShadow: "0 1px 2px 0 rgb(0 0 0 / 0.05)" }}>
-      <CardContent sx={{ p: 3 }}>
-        <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
-          <Skeleton variant="circular" width={56} height={56} />
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Skeleton variant="text" sx={{ fontSize: "1.25rem", width: "60%" }} />
-            <Skeleton variant="text" width="40%" />
-          </Box>
-        </Stack>
-      </CardContent>
-    </Card>
-  );
-}
 
 export default function MemberDashboardPage({ token, user, onSelectProfessional }) {
   const [professionals, setProfessionals] = useState([]);
