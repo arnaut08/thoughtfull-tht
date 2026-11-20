@@ -1,6 +1,6 @@
 import { supabase } from "../db.js";
 
-export const NOTIFICATION_PAGE_SIZE = 50;
+const NOTIFICATION_PAGE_SIZE = 50;
 
 // Returns the user's most recent notifications, newest first, and the total unread count.
 export async function listNotificationsForUser(userId) {

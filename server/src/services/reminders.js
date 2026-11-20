@@ -1,9 +1,9 @@
 import { supabase } from "../db.js";
 
-export const REMINDER_INTERVAL_MS = 30_000;
+const REMINDER_INTERVAL_MS = 30_000;
 
 // Delivers every reminder that is due. Returns how many were delivered. Safe to call from several processes at once.
-export async function deliverDueReminders() {
+async function deliverDueReminders() {
   const { data, error } = await supabase.rpc("deliver_due_reminders");
   if (error) throw error;
   return data;
