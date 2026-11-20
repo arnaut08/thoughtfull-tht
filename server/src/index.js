@@ -1,14 +1,17 @@
-import express from "express";
+import "dotenv/config";
+// Loads the Supabase client and checks its env vars at startup.
+import "./db.js";
+import { createApp } from "./app.js";
+import { startReminderWorker } from "./services/reminders.js";
 
-const app = express();
+if (!process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET must be set in server/.env");
+}
+
+const app = createApp();
 const port = process.env.PORT ?? 3001;
-
-app.use(express.json());
-
-app.get("/api/health", (_request, response) => {
-  response.json({ status: "ok" });
-});
 
 app.listen(port, () => {
   console.log(`Server listening on http://localhost:${port}`);
+  startReminderWorker();
 });

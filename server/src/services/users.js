@@ -1,0 +1,92 @@
+import { DateTime } from "luxon";
+import { supabase } from "../db.js";
+
+export class EmailTakenError extends Error {
+  constructor() {
+    super("An account with this email already exists");
+    this.name = "EmailTakenError";
+  }
+}
+
+export function toProfessionalSummary(row) {
+  return { id: row.id, name: row.name, timezone: row.timezone };
+}
+
+// Shapes a stored row for API responses, expressing createdAt in the user's own timezone.
+export function toPublicUser(row) {
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    role: row.role,
+    timezone: row.timezone,
+    createdAt: DateTime.fromISO(row.created_at, { zone: "utc" })
+      .setZone(row.timezone)
+      .toISO(),
+  };
+}
+
+export async function createUser({ email, passwordHash, name, role, timezone }) {
+  const { data, error } = await supabase
+    .from("users")
+    .insert({
+      email,
+      password_hash: passwordHash,
+      name,
+      role,
+      timezone,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === "23505") throw new EmailTakenError();
+    throw error;
+  }
+  return data;
+}
+
+export async function setBookingNotice(userId, hours) {
+  const { error } = await supabase
+    .from("users")
+    .update({ min_booking_notice_hours: hours })
+    .eq("id", userId);
+
+  if (error) throw error;
+}
+
+export async function findUserByEmail(email) {
+  const { data, error } = await supabase
+    .from("users")
+    .select()
+    .eq("email", email)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function findUserById(id) {
+  const { data, error } = await supabase
+    .from("users")
+    .select()
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+// Returns a Map from id to { id, name, timezone } for the given ids. Ids with no matching user are absent.
+export async function findUsersByIds(ids) {
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, name, timezone")
+    .in("id", uniqueIds);
+
+  if (error) throw error;
+  return new Map(data.map((user) => [user.id, user]));
+}
