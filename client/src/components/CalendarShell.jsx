@@ -1,3 +1,3 @@
-export default function CalendarShell({ children }) {
-  return <div className="tf-calendar">{children}</div>;
+export default function CalendarShell({ className, children }) {
+  return <div className={className ? `tf-calendar ${className}` : "tf-calendar"}>{children}</div>;
 }

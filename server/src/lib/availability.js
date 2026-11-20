@@ -1,4 +1,4 @@
-export const MIN_WINDOW_MINUTES = 50;
+const MIN_WINDOW_MINUTES = 50;
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 

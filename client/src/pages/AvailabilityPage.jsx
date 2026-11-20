@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
 import CalendarShell from "../components/CalendarShell.jsx";
+import { AvailabilityPageSkeleton } from "../components/PageSkeletons.jsx";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import {
@@ -11,13 +12,14 @@ import {
   CardContent,
   Chip,
   InputAdornment,
-  Skeleton,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
 import { fetchAvailability, saveAvailability, saveBookingNotice } from "../api/availability.js";
-import { DAY_NAMES } from "../lib/schedule.js";
+import BackButton from "../components/BackButton.jsx";
+import StickyActionBar from "../components/StickyActionBar.jsx";
+import { DAY_NAMES, toHHmm, toMinutes } from "../lib/schedule.js";
 
 const MIN_WINDOW_MINUTES = 50;
 const MAX_NOTICE_HOURS = 168;
@@ -30,16 +32,6 @@ const REFERENCE_SUNDAY = "2000-01-02";
 const REFERENCE_SUNDAY_MS = Date.UTC(2000, 0, 2);
 
 let lastWindowId = 0;
-
-function toMinutes(time) {
-  const [hours, minutes] = time.split(":").map(Number);
-  return hours * 60 + minutes;
-}
-
-function toHHmm(minutes) {
-  const hours = String(Math.floor(minutes / 60)).padStart(2, "0");
-  return `${hours}:${String(minutes % 60).padStart(2, "0")}`;
-}
 
 // Converts a calendar start/end into a day of week and minutes from that day's midnight.
 function toWindow(start, end) {
@@ -129,7 +121,6 @@ function AvailabilityPage({ token, user, onBack }) {
   const draftRules = useMemo(() => sortRules(events.map(eventToRule)), [events]);
   const isDirty = JSON.stringify(draftRules) !== JSON.stringify(sortRules(savedRules));
 
-
   function warn(text) {
     setMessage({ severity: "warning", text });
   }
@@ -167,7 +158,6 @@ function AvailabilityPage({ token, user, onBack }) {
     setMessage(null);
     setEvents(savedRules.map(ruleToEvent));
   }
-
 
   async function handleSave() {
     const rules = draftRules;
@@ -212,20 +202,7 @@ function AvailabilityPage({ token, user, onBack }) {
   }
 
   if (loading) {
-    return (
-      <Stack spacing={2} aria-busy="true" aria-live="polite">
-        <Skeleton variant="rounded" width={180} height={36} sx={{ alignSelf: "flex-start" }} />
-        <Box>
-          <Skeleton variant="text" sx={{ fontSize: "1.5rem", width: 200 }} />
-          <Skeleton variant="text" width={260} />
-        </Box>
-        <Card>
-          <CardContent>
-            <Skeleton variant="rounded" height={560} />
-          </CardContent>
-        </Card>
-      </Stack>
-    );
+    return <AvailabilityPageSkeleton />;
   }
 
   if (loadError) {
@@ -234,18 +211,7 @@ function AvailabilityPage({ token, user, onBack }) {
 
   return (
     <Stack spacing={2}>
-      <Button
-        variant="outlined"
-        onClick={onBack}
-        sx={{
-          alignSelf: "flex-start",
-          color: "primary.main",
-          borderColor: "primary.main",
-          "&:hover": { borderColor: "primary.dark", bgcolor: "action.hover" },
-        }}
-      >
-        Back to profile
-      </Button>
+      <BackButton onClick={onBack}>Back to profile</BackButton>
 
       <Box>
         <Typography variant="h5" component="h1">
@@ -319,50 +285,36 @@ function AvailabilityPage({ token, user, onBack }) {
       <Card>
         <CardContent>
           <CalendarShell>
-          <FullCalendar
-            ref={calendarRef}
-            plugins={[timeGridPlugin, interactionPlugin]}
-            initialView="timeGridWeek"
-            initialDate={REFERENCE_SUNDAY}
-            headerToolbar={false}
-            timeZone="UTC"
-            firstDay={0}
-            dayHeaderFormat={{ weekday: "long" }}
-            allDaySlot={false}
-            slotDuration="00:30:00"
-            slotMinTime="00:00:00"
-            slotMaxTime="24:00:00"
-            height="auto"
-            selectable
-            selectMirror
-            editable
-            events={events}
-            eventClassNames={windowClassNames}
-            eventContent={renderWindow}
-            select={handleSelect}
-            eventClick={handleEventClick}
-            eventDrop={handleEventChange}
-            eventResize={handleEventChange}
-          />
+            <FullCalendar
+              ref={calendarRef}
+              plugins={[timeGridPlugin, interactionPlugin]}
+              initialView="timeGridWeek"
+              initialDate={REFERENCE_SUNDAY}
+              headerToolbar={false}
+              timeZone="UTC"
+              firstDay={0}
+              dayHeaderFormat={{ weekday: "long" }}
+              allDaySlot={false}
+              slotDuration="00:30:00"
+              slotMinTime="00:00:00"
+              slotMaxTime="24:00:00"
+              height="auto"
+              selectable
+              selectMirror
+              editable
+              events={events}
+              eventClassNames={windowClassNames}
+              eventContent={renderWindow}
+              select={handleSelect}
+              eventClick={handleEventClick}
+              eventDrop={handleEventChange}
+              eventResize={handleEventChange}
+            />
           </CalendarShell>
         </CardContent>
       </Card>
 
-      <Box
-        sx={{
-          position: "sticky",
-          bottom: 0,
-          zIndex: 1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "flex-end",
-          gap: 2,
-          py: 1.5,
-          bgcolor: "background.paper",
-          borderTop: 1,
-          borderColor: "divider",
-        }}
-      >
+      <StickyActionBar>
         {isDirty && <Chip size="small" color="warning" variant="outlined" label="Unsaved changes" />}
         <Button onClick={handleDiscard} disabled={!isDirty || saving}>
           Reset
@@ -370,7 +322,7 @@ function AvailabilityPage({ token, user, onBack }) {
         <Button variant="contained" onClick={handleSave} disabled={!isDirty || saving}>
           {saving ? "Saving…" : "Save availability"}
         </Button>
-      </Box>
+      </StickyActionBar>
     </Stack>
   );
 }

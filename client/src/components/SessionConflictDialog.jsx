@@ -24,12 +24,17 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CloseIcon from "@mui/icons-material/Close";
 import { blockDate, fetchRescheduleSuggestions } from "../api/availability.js";
 import { fetchProfessionalBookings, rescheduleProfessionalBooking } from "../api/bookings.js";
-import { formatSessionDate, formatSessionTime } from "../lib/schedule.js";
+import { deepTealButtonSx } from "../lib/buttonStyles.js";
+import {
+  formatSessionDate,
+  formatSessionTime,
+  formatSessionTimeRange,
+} from "../lib/schedule.js";
 
 // Shown when a professional blocks a date that already has sessions. Each choice ends with the day blocked.
 function SessionConflictDialog({ token, timezone, date, sessions, onBlocked, onClose }) {
   const [mode, setMode] = useState("choose");
-  const [remaining] = useState(sessions);
+  const remaining = sessions;
   const [movedIds, setMovedIds] = useState([]);
   const [movingId, setMovingId] = useState(null);
   const [openSlots, setOpenSlots] = useState(null);
@@ -146,7 +151,7 @@ function SessionConflictDialog({ token, timezone, date, sessions, onBlocked, onC
               {remaining.map((session) => (
                 <ListItem key={session.id} disableGutters>
                   <ListItemText
-                    primary={`${formatSessionTime(session.start, timezone)} – ${formatSessionTime(session.end, timezone)}`}
+                    primary={formatSessionTimeRange(session.start, session.end, timezone)}
                     secondary={`with ${session.member?.name ?? "member"}`}
                   />
                 </ListItem>
@@ -180,7 +185,7 @@ function SessionConflictDialog({ token, timezone, date, sessions, onBlocked, onC
                     <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between" }}>
                       <Box sx={{ minWidth: 0 }}>
                         <Typography variant="body2">
-                          {formatSessionTime(session.start, timezone)} – {formatSessionTime(session.end, timezone)} with{" "}
+                          {formatSessionTimeRange(session.start, session.end, timezone)} with{" "}
                           {session.member?.name ?? "member"}
                         </Typography>
                         <Typography variant="body2" color={moved ? "success.main" : chosen ? "text.secondary" : "error"}>
@@ -262,7 +267,7 @@ function SessionConflictDialog({ token, timezone, date, sessions, onBlocked, onC
               variant="contained"
               onClick={openReschedule}
               disabled={busy}
-              sx={{ bgcolor: "var(--color-primary-deep)", "&:hover": { bgcolor: "var(--color-primary-deep-hover)" } }}
+              sx={deepTealButtonSx}
             >
               Reschedule sessions
             </Button>
@@ -276,7 +281,7 @@ function SessionConflictDialog({ token, timezone, date, sessions, onBlocked, onC
               variant="contained"
               onClick={moveSessionsAndBlock}
               disabled={busy || !allChosen || remaining.length === 0}
-              sx={{ bgcolor: "var(--color-primary-deep)", "&:hover": { bgcolor: "var(--color-primary-deep-hover)" } }}
+              sx={deepTealButtonSx}
             >
               {busy ? "Moving sessions…" : "Move sessions and block day"}
             </Button>

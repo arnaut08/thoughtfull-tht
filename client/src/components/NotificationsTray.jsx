@@ -3,12 +3,12 @@ import { Box, Drawer, IconButton, List, ListItem, ListItemText, Skeleton, Stack,
 import CloseIcon from "@mui/icons-material/Close";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import { fetchNotifications, markNotificationsRead } from "../api/notifications.js";
-import { formatSessionDate, formatSessionTime } from "../lib/schedule.js";
+import { formatSessionDate, formatSessionDateTime } from "../lib/schedule.js";
 
 function describeNotification(notification, timezone) {
-  const when = `${formatSessionDate(notification.sessionStart, timezone)} at ${formatSessionTime(notification.sessionStart, timezone)}`;
+  const when = formatSessionDateTime(notification.sessionStart, timezone);
   if (notification.type === "session_rescheduled") {
-    const newWhen = `${formatSessionDate(notification.newStart, timezone)} at ${formatSessionTime(notification.newStart, timezone)}`;
+    const newWhen = formatSessionDateTime(notification.newStart, timezone);
     return `${notification.actor.name} rescheduled the session from ${when} to ${newWhen}.`;
   }
   if (notification.type === "session_reminder") {

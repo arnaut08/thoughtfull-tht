@@ -10,9 +10,7 @@ notificationsRouter.use(requireAuth);
 // Notifications for the signed-in user, newest first. Members and professionals both receive them.
 notificationsRouter.get("/", async (request, response) => {
   const { notifications, unreadCount } = await listNotificationsForUser(request.user.id);
-  const actors = new Map(
-    (await findUsersByIds(notifications.map((row) => row.actor_id))).map((actor) => [actor.id, actor]),
-  );
+  const actors = await findUsersByIds(notifications.map((row) => row.actor_id));
 
   response.json({
     unreadCount,

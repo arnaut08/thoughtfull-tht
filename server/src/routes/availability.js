@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { DateTime } from "luxon";
 import { requireAuth } from "../middleware/requireAuth.js";
-import { requireProfessional } from "../middleware/requireProfessional.js";
+import { requireProfessional } from "../middleware/requireRole.js";
 import { normalizeRules, toApiRule } from "../lib/availability.js";
-import { SLOT_HORIZON_DAYS, generateOpenSlots } from "../lib/slots.js";
+import { SLOT_HORIZON_DAYS, bookingInterval, generateOpenSlots, toZonedInterval } from "../lib/slots.js";
+import { parseCalendarDate } from "../lib/validation.js";
 import {
   addBlockedDate,
   getBlockedDatesForProfessional,
@@ -16,6 +17,7 @@ import {
   getMemberBookingsOverlapping,
   getProfessionalBookingsOverlapping,
 } from "../services/professionals.js";
+import { loadProfessionalSchedule } from "../services/openSlots.js";
 import { findUserById, findUsersByIds, setBookingNotice } from "../services/users.js";
 
 export const availabilityRouter = Router();
@@ -24,13 +26,6 @@ availabilityRouter.use(requireAuth, requireProfessional);
 
 const RESOLUTIONS = new Set(["keep", "cancel"]);
 const MAX_BOOKING_NOTICE_HOURS = 168;
-
-// Returns a YYYY-MM-DD string for a real calendar date, or null.
-function parseDate(value) {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const date = DateTime.fromISO(value);
-  return date.isValid && date.toISODate() === value ? value : null;
-}
 
 // Returns the professional's sessions that start on the given local date, in their timezone, soonest first.
 async function getSessionsOnDate(professional, date) {
@@ -44,9 +39,7 @@ async function getSessionsOnDate(professional, date) {
     .map((booking) => ({ ...booking, start: DateTime.fromISO(booking.starts_at).setZone(professional.timezone) }))
     .filter((booking) => booking.start.toISODate() === date)
     .sort((a, b) => a.start.toMillis() - b.start.toMillis());
-  const members = new Map(
-    (await findUsersByIds(onDate.map((booking) => booking.member_id))).map((member) => [member.id, member]),
-  );
+  const members = await findUsersByIds(onDate.map((booking) => booking.member_id));
 
   return onDate.map((booking) => ({
     id: booking.id,
@@ -91,7 +84,7 @@ availabilityRouter.put("/booking-notice", async (request, response) => {
 // "keep" leaves the sessions in place, and "cancel" cancels them (notifying members) before blocking.
 // Rescheduling is done by the client through the reschedule endpoint, then this is called again without a resolution.
 availabilityRouter.post("/blocked-dates", async (request, response) => {
-  const date = parseDate(request.body?.date);
+  const date = parseCalendarDate(request.body?.date);
   if (!date) {
     return response.status(400).json({ error: "date must be a YYYY-MM-DD calendar date" });
   }
@@ -131,7 +124,7 @@ availabilityRouter.post("/blocked-dates", async (request, response) => {
 });
 
 availabilityRouter.delete("/blocked-dates/:date", async (request, response) => {
-  const date = parseDate(request.params.date);
+  const date = parseCalendarDate(request.params.date);
   if (!date) {
     return response.status(400).json({ error: "date must be a YYYY-MM-DD calendar date" });
   }
@@ -141,7 +134,7 @@ availabilityRouter.delete("/blocked-dates/:date", async (request, response) => {
 });
 
 availabilityRouter.get("/reschedule-suggestions", async (request, response) => {
-  const date = parseDate(request.query.date);
+  const date = parseCalendarDate(request.query.date);
   if (!date) {
     return response.status(400).json({ error: "date must be a YYYY-MM-DD calendar date" });
   }
@@ -160,25 +153,20 @@ availabilityRouter.get("/reschedule-suggestions", async (request, response) => {
   const horizonEnd = now.plus({ days: SLOT_HORIZON_DAYS });
   const zone = professional.timezone;
   const memberIds = [...new Set(sessions.map((session) => session.member_id))];
-  const [rules, blockedDates, bookings, memberRows] = await Promise.all([
-    getRulesForProfessional(professional.id),
-    getBlockedDatesForProfessional(professional.id),
-    getProfessionalBookingsOverlapping(professional.id, now, horizonEnd),
+  const [schedule, memberRows] = await Promise.all([
+    loadProfessionalSchedule(professional.id, now, horizonEnd),
     Promise.all(memberIds.map((memberId) => getMemberBookingsOverlapping(memberId, now, horizonEnd))),
   ]);
   const memberBookingsById = new Map(memberIds.map((id, index) => [id, memberRows[index]]));
 
   // The blocked day is excluded from candidates, so suggestions only land on other days.
   const candidates = generateOpenSlots({
-    rules: rules.map(toApiRule),
-    blockedDates: [...blockedDates, date],
+    rules: schedule.rules,
+    blockedDates: [...schedule.blockedDates, date],
     timezone: zone,
     now,
     horizonEnd,
-    booked: bookings.map((booking) => ({
-      start: DateTime.fromISO(booking.starts_at),
-      end: DateTime.fromISO(booking.ends_at),
-    })),
+    booked: schedule.bookings.map(bookingInterval),
   })
     .filter((slot) => slot.start.setZone(zone).toISODate() > date)
     .sort((a, b) => a.start.toMillis() - b.start.toMillis());
@@ -190,11 +178,10 @@ availabilityRouter.get("/reschedule-suggestions", async (request, response) => {
     const free = candidates.filter(
       (slot) =>
         !taken.has(slot.start.toMillis()) &&
-        !memberSessions.some(
-          (booking) =>
-            slot.start.toMillis() < DateTime.fromISO(booking.ends_at).toMillis() &&
-            slot.end.toMillis() > DateTime.fromISO(booking.starts_at).toMillis(),
-        ),
+        !memberSessions.some((booking) => {
+          const interval = bookingInterval(booking);
+          return slot.start < interval.end && slot.end > interval.start;
+        }),
     );
     const sameTime = localTime(DateTime.fromISO(session.start));
     const pick = free.find((slot) => localTime(slot.start) === sameTime) ?? free[0] ?? null;
@@ -205,9 +192,7 @@ availabilityRouter.get("/reschedule-suggestions", async (request, response) => {
       start: session.start,
       end: session.end,
       member: session.member,
-      suggested: pick
-        ? { start: pick.start.setZone(zone).toISO(), end: pick.end.setZone(zone).toISO() }
-        : null,
+      suggested: pick ? toZonedInterval(pick, zone) : null,
     };
   });
 

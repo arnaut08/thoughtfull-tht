@@ -1,66 +1,31 @@
 import { Router } from "express";
 import { DateTime } from "luxon";
 import { requireAuth } from "../middleware/requireAuth.js";
-import { requireMember } from "../middleware/requireMember.js";
-import { toApiRule } from "../lib/availability.js";
+import { requireMember } from "../middleware/requireRole.js";
 import { isBeyondNotice, noticeClosedMessage } from "../lib/cancellation.js";
-import { SLOT_HORIZON_DAYS, generateOpenSlots } from "../lib/slots.js";
+import { bookingInterval, toZonedInterval } from "../lib/slots.js";
+import { isUuid, parseIsoDateTime } from "../lib/validation.js";
 import { getBookingForMember } from "../services/bookings.js";
-import { getBlockedDatesForProfessional, getRulesForProfessional } from "../services/availability.js";
-import {
-  bookSession,
-  getMemberBookingsOverlapping,
-  getProfessionalBookingsOverlapping,
-  listProfessionals,
-  rescheduleSession,
-} from "../services/professionals.js";
-import { findUserById } from "../services/users.js";
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function toProfessionalSummary(row) {
-  return { id: row.id, name: row.name, timezone: row.timezone };
-}
+import { bookSession, listProfessionals, rescheduleSession } from "../services/professionals.js";
+import { findSlotAt, loadOpenSlots } from "../services/openSlots.js";
+import { findUserById, toProfessionalSummary } from "../services/users.js";
 
 async function findProfessional(id) {
-  if (!UUID_PATTERN.test(id)) return null;
+  if (!isUuid(id)) return null;
   const professional = await findUserById(id);
   return professional?.role === "professional" ? professional : null;
 }
 
 // Returns the member's booking with this professional if it exists, else null.
 async function findMemberBookingWithProfessional(bookingId, member, professional) {
-  if (!UUID_PATTERN.test(bookingId)) return null;
+  if (!isUuid(bookingId)) return null;
   const booking = await getBookingForMember(bookingId, member.id);
   return booking?.professional_id === professional.id ? booking : null;
 }
 
-// Open sessions over the next SLOT_HORIZON_DAYS, as DateTimes in the professional's zone.
-// Sessions that overlap the member's bookings with any professional are excluded too, unless checkMember is false.
-// excludeBookingId is the session being rescheduled, so it doesn't block its own time.
-export async function loadOpenSlots(professional, member, now, excludeBookingId, { checkMember = true } = {}) {
-  const horizonEnd = now.plus({ days: SLOT_HORIZON_DAYS });
-  const [rows, blockedDates, professionalBookings, memberBookings] = await Promise.all([
-    getRulesForProfessional(professional.id),
-    getBlockedDatesForProfessional(professional.id),
-    getProfessionalBookingsOverlapping(professional.id, now, horizonEnd),
-    checkMember ? getMemberBookingsOverlapping(member.id, now, horizonEnd) : [],
-  ]);
-
-  return generateOpenSlots({
-    rules: rows.map(toApiRule),
-    blockedDates,
-    timezone: professional.timezone,
-    now,
-    horizonEnd,
-    minNoticeHours: professional.min_booking_notice_hours,
-    booked: [...professionalBookings, ...memberBookings]
-      .filter((booking) => !excludeBookingId || booking.id !== excludeBookingId)
-      .map((booking) => ({
-        start: DateTime.fromISO(booking.starts_at),
-        end: DateTime.fromISO(booking.ends_at),
-      })),
-  });
+// The booking as the member sees it: the professional, plus the slot in the member's timezone.
+function toMemberBooking(professional, slot, timezone) {
+  return { professional: toProfessionalSummary(professional), ...toZonedInterval(slot, timezone) };
 }
 
 export const professionalsRouter = Router();
@@ -92,15 +57,11 @@ professionalsRouter.get("/:id", async (request, response) => {
     if (!booking) {
       return response.status(404).json({ error: "Session not found" });
     }
-    const start = DateTime.fromISO(booking.starts_at);
-    if (!isBeyondNotice(start, now)) {
+    const interval = bookingInterval(booking);
+    if (!isBeyondNotice(interval.start, now)) {
       return response.status(409).json({ error: noticeClosedMessage("rescheduled") });
     }
-    reschedule = {
-      id: booking.id,
-      start: start.setZone(member.timezone).toISO(),
-      end: DateTime.fromISO(booking.ends_at).setZone(member.timezone).toISO(),
-    };
+    reschedule = { id: booking.id, ...toZonedInterval(interval, member.timezone) };
   }
 
   const slots = await loadOpenSlots(professional, member, now, reschedule?.id);
@@ -110,19 +71,15 @@ professionalsRouter.get("/:id", async (request, response) => {
     min_booking_notice_hours: professional.min_booking_notice_hours,
     timezone: member.timezone,
     reschedule,
-    slots: slots.map(({ start, end }) => ({
-      start: start.setZone(member.timezone).toISO(),
-      end: end.setZone(member.timezone).toISO(),
-    })),
+    slots: slots.map((slot) => toZonedInterval(slot, member.timezone)),
   });
 });
 
 // Books one of the open slots returned by GET. The start must match an open slot exactly, so
 // members can't book arbitrary times. Concurrent bookings are serialized by book_session.
 professionalsRouter.post("/:id/bookings", requireMember, async (request, response) => {
-  const startsAtInput = request.body?.starts_at;
-  const startsAt = typeof startsAtInput === "string" ? DateTime.fromISO(startsAtInput) : null;
-  if (!startsAt?.isValid) {
+  const startsAt = parseIsoDateTime(request.body?.starts_at);
+  if (!startsAt) {
     return response.status(400).json({ error: "starts_at must be an ISO timestamp" });
   }
 
@@ -137,8 +94,7 @@ professionalsRouter.post("/:id/bookings", requireMember, async (request, respons
     return response.status(404).json({ error: "Professional not found" });
   }
 
-  const slots = await loadOpenSlots(professional, member, DateTime.utc());
-  const slot = slots.find((candidate) => candidate.start.toMillis() === startsAt.toMillis());
+  const slot = findSlotAt(await loadOpenSlots(professional, member, DateTime.utc()), startsAt);
   if (!slot) {
     return response.status(409).json({ error: "That session is no longer available" });
   }
@@ -160,13 +116,7 @@ professionalsRouter.post("/:id/bookings", requireMember, async (request, respons
     throw error;
   }
 
-  response.status(201).json({
-    booking: {
-      professional: toProfessionalSummary(professional),
-      start: slot.start.setZone(member.timezone).toISO(),
-      end: slot.end.setZone(member.timezone).toISO(),
-    },
-  });
+  response.status(201).json({ booking: toMemberBooking(professional, slot, member.timezone) });
 });
 
 // Moves one of the member's sessions with this professional to an open slot. Uses the same slot rules as
@@ -175,9 +125,8 @@ professionalsRouter.post(
   "/:id/bookings/:bookingId/reschedule",
   requireMember,
   async (request, response) => {
-    const startsAtInput = request.body?.starts_at;
-    const startsAt = typeof startsAtInput === "string" ? DateTime.fromISO(startsAtInput) : null;
-    if (!startsAt?.isValid) {
+    const startsAt = parseIsoDateTime(request.body?.starts_at);
+    if (!startsAt) {
       return response.status(400).json({ error: "starts_at must be an ISO timestamp" });
     }
 
@@ -197,13 +146,11 @@ professionalsRouter.post(
     if (!booking) {
       return response.status(404).json({ error: "Session not found" });
     }
-    const previousStart = DateTime.fromISO(booking.starts_at);
-    if (!isBeyondNotice(previousStart, now)) {
+    if (!isBeyondNotice(DateTime.fromISO(booking.starts_at), now)) {
       return response.status(409).json({ error: noticeClosedMessage("rescheduled") });
     }
 
-    const slots = await loadOpenSlots(professional, member, now, booking.id);
-    const slot = slots.find((candidate) => candidate.start.toMillis() === startsAt.toMillis());
+    const slot = findSlotAt(await loadOpenSlots(professional, member, now, booking.id), startsAt);
     if (!slot) {
       return response.status(409).json({ error: "That session is no longer available" });
     }
@@ -232,12 +179,6 @@ professionalsRouter.post(
       throw error;
     }
 
-    response.json({
-      booking: {
-        professional: toProfessionalSummary(professional),
-        start: slot.start.setZone(member.timezone).toISO(),
-        end: slot.end.setZone(member.timezone).toISO(),
-      },
-    });
+    response.json({ booking: toMemberBooking(professional, slot, member.timezone) });
   },
 );

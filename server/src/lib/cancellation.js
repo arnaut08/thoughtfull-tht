@@ -1,7 +1,7 @@
 import { DateTime } from "luxon";
 
 // Members can cancel or reschedule a session only if it starts more than this many hours from now.
-export const CANCELLATION_NOTICE_HOURS = 24;
+const CANCELLATION_NOTICE_HOURS = 24;
 
 export function noticeCutoff(now) {
   return now.plus({ hours: CANCELLATION_NOTICE_HOURS });
