@@ -42,7 +42,6 @@ body {
   box-shadow: 0 0 0 2px var(--color-surface);
 }
 
-
 /* Toolbar buttons: flat, rounded, pastel. Scoped under .fc-toolbar to outrank FullCalendar's defaults. */
 .session-calendar .fc-toolbar .fc-button {
   border: 0;

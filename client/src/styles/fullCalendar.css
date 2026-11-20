@@ -51,6 +51,4 @@
 .tf-calendar .tf-slot.is-selected { background: var(--color-primary); color: var(--color-on-primary); }
 
 /* Professional views */
-.tf-calendar .tf-booked { background: var(--color-primary); color: var(--color-on-primary); border-radius: 6px; }
-.tf-calendar .tf-open-slot { background: color-mix(in srgb, var(--color-accent) 22%, white); }
 .tf-calendar .tf-availability { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
